@@ -108,6 +108,16 @@
       z-index: 5;
       color: var(--table-header-text) !important;
       padding: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .table th:hover {
+      background: var(--primary) !important;
+      opacity: 0.9;
+    }
+    .table th .sort-indicator {
+      margin-left: 0.5rem;
+      font-size: 0.8em;
     }
     .table td {
       padding: 0.75rem;
@@ -180,6 +190,9 @@
       max-width: 200px;
       margin: 0 auto 1rem;
       object-fit: contain;
+    }
+    .theme-logo[src] {
+      display: block;
     }
 
     .header-with-logo {
@@ -264,11 +277,11 @@
         <table class="table table-dark table-hover" id="resultsTable">
           <thead>
             <tr>
-              <th>Order</th>
-              <th>Location</th>
-              <th># oLPNs</th>
-              <th>SVIA</th>
-              <th>Divert Date/Time</th>
+              <th data-sort="OrderId" data-sort-type="string">Order <span class="sort-indicator"></span></th>
+              <th data-sort="Location" data-sort-type="string">Location <span class="sort-indicator"></span></th>
+              <th data-sort="OlpnCount" data-sort-type="number"># oLPNs <span class="sort-indicator"></span></th>
+              <th data-sort="SVIA" data-sort-type="string">SVIA <span class="sort-indicator"></span></th>
+              <th data-sort="DivertDateTime" data-sort-type="string">Divert Date/Time <span class="sort-indicator"></span></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -350,6 +363,7 @@
     let org = null;
     let selectedOrder = null;
     let ordersData = [];
+    let currentSort = { column: 'OrderId', direction: 'asc' }; // Default sort
 
     // Console logging function
     function logToConsole(message, type = 'info') {
@@ -513,10 +527,20 @@
       });
 
       // Update logo
-      if (theme.logo) {
-        themeLogo.src = theme.logo;
+      if (theme.logo && themeLogo) {
+        // Use absolute path from root
+        const logoPath = theme.logo.startsWith('/') ? theme.logo : '/' + theme.logo;
+        themeLogo.src = logoPath;
         themeLogo.style.display = 'block';
-      } else {
+        themeLogo.onerror = function() {
+          console.warn(`Logo not found: ${logoPath}`);
+          logToConsole(`Logo not found: ${logoPath}`, 'warning');
+          this.style.display = 'none';
+        };
+        themeLogo.onload = function() {
+          logToConsole(`Logo loaded: ${logoPath}`, 'success');
+        };
+      } else if (themeLogo) {
         themeLogo.style.display = 'none';
       }
 
@@ -535,6 +559,83 @@
     function loadTheme() {
       const savedTheme = localStorage.getItem('selectedTheme') || 'dark';
       applyTheme(savedTheme);
+      
+      // Load saved sort preference
+      const savedSort = localStorage.getItem('bandingSort');
+      if (savedSort) {
+        try {
+          currentSort = JSON.parse(savedSort);
+        } catch (e) {
+          console.warn('Failed to parse saved sort:', e);
+        }
+      }
+    }
+    
+    // Sorting functions
+    function sortOrders(data, column, direction) {
+      const sorted = [...data];
+      const sortType = document.querySelector(`th[data-sort="${column}"]`)?.dataset.sortType || 'string';
+      
+      sorted.sort((a, b) => {
+        let aVal = a[column] || '';
+        let bVal = b[column] || '';
+        
+        // Handle different data types
+        if (sortType === 'number') {
+          aVal = Number(aVal) || 0;
+          bVal = Number(bVal) || 0;
+        } else {
+          aVal = String(aVal).toLowerCase();
+          bVal = String(bVal).toLowerCase();
+        }
+        
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      return sorted;
+    }
+    
+    function updateSortIndicators() {
+      // Clear all indicators
+      document.querySelectorAll('.table th .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+      });
+      
+      // Add indicator to current sort column
+      const currentHeader = document.querySelector(`th[data-sort="${currentSort.column}"]`);
+      if (currentHeader) {
+        const indicator = currentHeader.querySelector('.sort-indicator');
+        if (indicator) {
+          indicator.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+        }
+      }
+    }
+    
+    function handleHeaderClick(header) {
+      const column = header.dataset.sort;
+      if (!column) return;
+      
+      // Toggle direction if clicking same column, otherwise default to asc
+      if (currentSort.column === column) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('bandingSort', JSON.stringify(currentSort));
+      
+      // Update indicators and re-render
+      updateSortIndicators();
+      if (ordersData.length > 0) {
+        const sortedData = sortOrders(ordersData, currentSort.column, currentSort.direction);
+        renderResults(sortedData);
+      }
+      
+      logToConsole(`Sorted by ${column} ${currentSort.direction}`, 'info');
     }
 
     function renderThemeList() {
@@ -621,6 +722,12 @@
       
       mainUI.style.display = 'block';
       
+      // Initialize table headers after UI is shown
+      setTimeout(() => {
+        initializeTableHeaders();
+        updateSortIndicators();
+      }, 100);
+      
       // Automatically search for orders after authentication
       await loadOrders();
     });
@@ -669,7 +776,11 @@
       
       status(`Found ${ordersData.length} orders`, 'success');
       logToConsole(`Found ${ordersData.length} orders to display`, 'success');
-      renderResults(ordersData);
+      
+      // Apply saved sort
+      const sortedData = sortOrders(ordersData, currentSort.column, currentSort.direction);
+      updateSortIndicators();
+      renderResults(sortedData);
     }
 
     // Render results
@@ -734,12 +845,34 @@
       // window.location.href = `/order/${selectedOrder.OrderId}`;
     };
 
+    // Initialize table header click handlers
+    function initializeTableHeaders() {
+      const headers = document.querySelectorAll('#resultsTable th[data-sort]');
+      headers.forEach(header => {
+        header.addEventListener('click', () => handleHeaderClick(header));
+      });
+    }
+
     // Initialize on page load
     window.addEventListener('DOMContentLoaded', () => {
       logToConsole(`Banding ${APP_VERSION} initialized`, 'success');
       
-      // Load theme
+      // Load theme and sort preferences
       loadTheme();
+      
+      // Initialize table headers for sorting
+      initializeTableHeaders();
+      
+      // Re-initialize headers after mainUI is shown (they might not exist yet)
+      const observer = new MutationObserver(() => {
+        if (mainUI.style.display !== 'none') {
+          initializeTableHeaders();
+          updateSortIndicators();
+        }
+      });
+      if (mainUI) {
+        observer.observe(mainUI, { attributes: true, attributeFilter: ['style'] });
+      }
       
       // Check for Organization parameter in URL and auto-authenticate
       if (urlOrg && urlOrg.trim()) {
