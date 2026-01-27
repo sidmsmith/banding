@@ -363,12 +363,31 @@
       console.log(`[${timestamp}] ${message}`);
     }
 
+    // Function to mask token in data objects
+    function maskToken(data) {
+      if (!data || typeof data !== 'object') return data;
+      
+      const masked = JSON.parse(JSON.stringify(data)); // Deep copy
+      
+      if (masked.token && typeof masked.token === 'string') {
+        const token = masked.token;
+        if (token.length > 10) {
+          masked.token = token.substring(0, 4) + '...' + token.substring(token.length - 4);
+        } else {
+          masked.token = '***';
+        }
+      }
+      
+      return masked;
+    }
+
     // API helper with logging
     async function api(endpoint, data) {
       try {
         logToConsole(`[API] Calling ${endpoint}...`, 'info');
         logToConsole(`[API] Request Payload:`, 'info');
-        logToConsole(JSON.stringify(data, null, 2), 'info');
+        const maskedData = maskToken(data);
+        logToConsole(JSON.stringify(maskedData, null, 2), 'info');
         
         const res = await fetch(`/api/${endpoint}`, {
           method: 'POST',
@@ -379,7 +398,8 @@
         const result = await res.json();
         
         logToConsole(`[API] Response:`, result.success ? 'success' : 'error');
-        logToConsole(JSON.stringify(result, null, 2), result.success ? 'success' : 'error');
+        const maskedResult = maskToken(result);
+        logToConsole(JSON.stringify(maskedResult, null, 2), result.success ? 'success' : 'error');
         
         return result;
       } catch (error) {
@@ -618,8 +638,28 @@
         return;
       }
       
+      // Log API calls made by backend
+      if (res.api_calls && Array.isArray(res.api_calls)) {
+        logToConsole(`\n=== Backend API Calls ===`, 'info');
+        res.api_calls.forEach((apiCall, index) => {
+          logToConsole(`\n[Backend API Call ${index + 1}] ${apiCall.description}`, 'info');
+          logToConsole(`Endpoint: ${apiCall.url}`, 'info');
+          logToConsole(`Payload:`, 'info');
+          logToConsole(JSON.stringify(apiCall.payload, null, 2), 'info');
+          if (apiCall.response) {
+            logToConsole(`Response Summary:`, 'info');
+            logToConsole(JSON.stringify(apiCall.response, null, 2), 'info');
+          }
+        });
+      }
+      
       ordersData = res.results || [];
-      logToConsole(`Orders data received: ${JSON.stringify(ordersData, null, 2)}`, 'info');
+      logToConsole(`\n=== Orders Data Received ===`, 'info');
+      logToConsole(`Total orders: ${ordersData.length}`, 'info');
+      if (ordersData.length > 0) {
+        logToConsole(`First order structure:`, 'info');
+        logToConsole(JSON.stringify(ordersData[0], null, 2), 'info');
+      }
       
       if (ordersData.length === 0) {
         status('No orders found with Status=7200', 'error');

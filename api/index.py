@@ -65,23 +65,40 @@ def search_orders(headers, org):
         "Page": 0
     }
     
+    print(f"[SEARCH_ORDERS] URL: {url}")
+    print(f"[SEARCH_ORDERS] Payload: {json.dumps(payload, indent=2)}")
+    print(f"[SEARCH_ORDERS] Organization: {org.upper()}")
+    print(f"[SEARCH_ORDERS] FacilityId: {facility_id}")
+    
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=60, verify=False)
+        print(f"[SEARCH_ORDERS] Status Code: {r.status_code}")
+        
         if r.ok:
             response_data = r.json()
+            print(f"[SEARCH_ORDERS] Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'Not a dict'}")
             # Extract orders from response
             orders = response_data.get("data", [])
             if isinstance(orders, list):
+                print(f"[SEARCH_ORDERS] Found {len(orders)} orders")
+                if len(orders) > 0:
+                    print(f"[SEARCH_ORDERS] First order keys: {list(orders[0].keys()) if isinstance(orders[0], dict) else 'Not a dict'}")
                 return orders
+            print(f"[SEARCH_ORDERS] Orders is not a list: {type(orders)}")
             return []
+        else:
+            print(f"[SEARCH_ORDERS] Error response: {r.text[:500]}")
         return []
     except Exception as e:
         print(f"[SEARCH_ORDERS] Error: {str(e)}")
+        import traceback
+        print(f"[SEARCH_ORDERS] Traceback: {traceback.format_exc()}")
         return []
 
 def search_olpns(order_ids, headers, org):
     """Search for oLPNs for given order IDs"""
     if not order_ids:
+        print(f"[SEARCH_OLPNS] No order IDs provided")
         return []
     
     url = f"https://{API_HOST}/pickpack/api/pickpack/olpn/search"
@@ -102,18 +119,35 @@ def search_olpns(order_ids, headers, org):
         "Page": 0
     }
     
+    print(f"[SEARCH_OLPNS] URL: {url}")
+    print(f"[SEARCH_OLPNS] Payload: {json.dumps(payload, indent=2)}")
+    print(f"[SEARCH_OLPNS] Organization: {org.upper()}")
+    print(f"[SEARCH_OLPNS] FacilityId: {facility_id}")
+    print(f"[SEARCH_OLPNS] Searching for {len(order_ids)} order IDs")
+    
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=60, verify=False)
+        print(f"[SEARCH_OLPNS] Status Code: {r.status_code}")
+        
         if r.ok:
             response_data = r.json()
+            print(f"[SEARCH_OLPNS] Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'Not a dict'}")
             # Extract oLPNs from response
             olpns = response_data.get("data", [])
             if isinstance(olpns, list):
+                print(f"[SEARCH_OLPNS] Found {len(olpns)} oLPNs")
+                if len(olpns) > 0:
+                    print(f"[SEARCH_OLPNS] First oLPN keys: {list(olpns[0].keys()) if isinstance(olpns[0], dict) else 'Not a dict'}")
                 return olpns
+            print(f"[SEARCH_OLPNS] oLPNs is not a list: {type(olpns)}")
             return []
+        else:
+            print(f"[SEARCH_OLPNS] Error response: {r.text[:500]}")
         return []
     except Exception as e:
         print(f"[SEARCH_OLPNS] Error: {str(e)}")
+        import traceback
+        print(f"[SEARCH_OLPNS] Traceback: {traceback.format_exc()}")
         return []
 
 def generate_random_divert_time():
@@ -147,30 +181,76 @@ def search_orders_endpoint():
     if not org or not token:
         return jsonify({"success": False, "error": "ORG and token required"})
     
+    print(f"\n=== [SEARCH_ORDERS_ENDPOINT] Starting search for ORG: {org.upper()} ===")
+    
     headers = {"Authorization": f"Bearer {token}"}
+    api_calls_log = []  # Track API calls for frontend logging
     
     # Step 1: Search for orders with Status=7200
+    print(f"[SEARCH_ORDERS_ENDPOINT] Step 1: Searching for orders with Status=7200...")
+    
+    # Log order search API call details
+    order_search_url = f"https://{API_HOST}/dcorder/api/dcorder/order/search"
+    order_search_payload = {
+        "Query": "MinimumStatus= '7200' and MaximumStatus = '7200'",
+        "Size": 1000,
+        "Page": 0
+    }
+    api_calls_log.append({
+        "type": "order_search",
+        "url": order_search_url,
+        "payload": order_search_payload,
+        "description": "Searching for orders with Status=7200"
+    })
+    
     orders = search_orders(headers, org)
     
     if not orders:
+        print(f"[SEARCH_ORDERS_ENDPOINT] No orders found")
         return jsonify({
             "success": True,
-            "results": []
+            "results": [],
+            "api_calls": api_calls_log
         })
+    
+    print(f"[SEARCH_ORDERS_ENDPOINT] Found {len(orders)} orders")
     
     # Extract OrderIds
     order_ids = [order.get("OrderId") for order in orders if order.get("OrderId")]
+    print(f"[SEARCH_ORDERS_ENDPOINT] Extracted {len(order_ids)} order IDs: {order_ids[:5]}{'...' if len(order_ids) > 5 else ''}")
     
     if not order_ids:
+        print(f"[SEARCH_ORDERS_ENDPOINT] No valid OrderIds found in orders")
         return jsonify({
             "success": True,
-            "results": []
+            "results": [],
+            "api_calls": api_calls_log
         })
     
     # Step 2: Search for oLPNs for these orders
+    print(f"[SEARCH_ORDERS_ENDPOINT] Step 2: Searching for oLPNs for {len(order_ids)} orders...")
+    
+    # Log oLPN search API call details
+    olpn_search_url = f"https://{API_HOST}/pickpack/api/pickpack/olpn/search"
+    order_ids_str = "', '".join(order_ids)
+    olpn_search_payload = {
+        "Query": f"OrderId in '{order_ids_str}'",
+        "Size": 1000,
+        "Page": 0
+    }
+    api_calls_log.append({
+        "type": "olpn_search",
+        "url": olpn_search_url,
+        "payload": olpn_search_payload,
+        "description": f"Searching for oLPNs for {len(order_ids)} orders"
+    })
+    
     olpns = search_olpns(order_ids, headers, org)
+    print(f"[SEARCH_ORDERS_ENDPOINT] Found {len(olpns)} oLPNs")
     
     # Step 3: Process and aggregate data
+    print(f"[SEARCH_ORDERS_ENDPOINT] Step 3: Processing and aggregating data...")
+    
     # Group oLPNs by OrderId
     olpns_by_order = {}
     for olpn in olpns:
@@ -179,6 +259,8 @@ def search_orders_endpoint():
             if order_id not in olpns_by_order:
                 olpns_by_order[order_id] = []
             olpns_by_order[order_id].append(olpn)
+    
+    print(f"[SEARCH_ORDERS_ENDPOINT] Grouped oLPNs into {len(olpns_by_order)} orders")
     
     # Build results
     results = []
@@ -193,21 +275,21 @@ def search_orders_endpoint():
         # Get unique oLPN count
         unique_olpns = set()
         for olpn in order_olpns:
-            olpn_id = olpn.get("oLPNId") or olpn.get("OlpnId")
+            olpn_id = olpn.get("oLPNId") or olpn.get("OlpnId") or olpn.get("olpnId")
             if olpn_id:
                 unique_olpns.add(olpn_id)
         
         # Get Location from first oLPN where CurrentLocationId is not null
         location = None
         for olpn in order_olpns:
-            location = olpn.get("CurrentLocationId") or olpn.get("currentLocationId")
+            location = olpn.get("CurrentLocationId") or olpn.get("currentLocationId") or olpn.get("CurrentLocation")
             if location:
                 break
         
         # Get SVIA (ShipViaId) from order or first oLPN
-        svia = order.get("ShipViaId") or order.get("shipViaId")
+        svia = order.get("ShipViaId") or order.get("shipViaId") or order.get("ShipVia")
         if not svia and order_olpns:
-            svia = order_olpns[0].get("ShipViaId") or order_olpns[0].get("shipViaId")
+            svia = order_olpns[0].get("ShipViaId") or order_olpns[0].get("shipViaId") or order_olpns[0].get("ShipVia")
         
         # Generate random divert date/time
         divert_datetime = generate_random_divert_time()
@@ -222,9 +304,19 @@ def search_orders_endpoint():
         print(f"[RESULT] Order: {order_id}, Location: {location}, OlpnCount: {len(unique_olpns)}, SVIA: {svia}, DivertDateTime: {divert_datetime}")
         results.append(result_item)
     
+    print(f"[SEARCH_ORDERS_ENDPOINT] Returning {len(results)} results")
+    
+    # Add response info to API calls log
+    for api_call in api_calls_log:
+        if api_call["type"] == "order_search":
+            api_call["response"] = {"orders_found": len(orders)}
+        elif api_call["type"] == "olpn_search":
+            api_call["response"] = {"olpns_found": len(olpns)}
+    
     return jsonify({
         "success": True,
-        "results": results
+        "results": results,
+        "api_calls": api_calls_log
     })
 
 # === FALLBACK: Serve index.html for SPA (Critical for Vercel) ===
