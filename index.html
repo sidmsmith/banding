@@ -373,8 +373,10 @@
         consoleEl.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
         consoleEl.scrollTop = consoleEl.scrollHeight;
       }
-      // Also log to browser console
-      console.log(`[${timestamp}] ${message}`);
+      // Only log errors to browser console for debugging unexpected issues
+      if (type === 'error') {
+        console.error(`[${timestamp}] ${message}`);
+      }
     }
 
     // Function to mask token in data objects
@@ -512,7 +514,7 @@
           '--logo-url': 'url("manhattan-logo.png")',
           '--logo-display': 'block'
         },
-        logo: 'manhattan-logo.png'
+        logo: 'manhattan-logo.png'  // Logo is in root directory, served as /manhattan-logo.png
       }
     };
 
@@ -528,43 +530,13 @@
 
       // Update logo
       if (theme.logo && themeLogo) {
-        // Try multiple path variations
-        const logoPaths = [
-          theme.logo,
-          '/' + theme.logo,
-          './' + theme.logo,
-          '../' + theme.logo
-        ];
-        
-        let logoLoaded = false;
-        let currentPathIndex = 0;
-        
-        const tryLoadLogo = (pathIndex) => {
-          if (pathIndex >= logoPaths.length) {
-            console.warn(`Logo not found in any of the attempted paths`);
-            logToConsole(`Logo not found. Tried: ${logoPaths.join(', ')}`, 'warning');
-            themeLogo.style.display = 'none';
-            return;
-          }
-          
-          const logoPath = logoPaths[pathIndex];
-          themeLogo.src = logoPath;
-          
-          themeLogo.onerror = function() {
-            // Try next path
-            tryLoadLogo(pathIndex + 1);
-          };
-          
-          themeLogo.onload = function() {
-            if (!logoLoaded) {
-              logoLoaded = true;
-              logToConsole(`Logo loaded: ${logoPath}`, 'success');
-              themeLogo.style.display = 'block';
-            }
-          };
+        // Logo is in root directory, server serves static files from root
+        themeLogo.src = '/' + theme.logo;
+        themeLogo.style.display = 'block';
+        themeLogo.onerror = function() {
+          // Silently hide if logo not found
+          this.style.display = 'none';
         };
-        
-        tryLoadLogo(0);
       } else if (themeLogo) {
         themeLogo.style.display = 'none';
       }
@@ -591,7 +563,7 @@
         try {
           currentSort = JSON.parse(savedSort);
         } catch (e) {
-          console.warn('Failed to parse saved sort:', e);
+          // Silently fail - will use default sort
         }
       }
     }
@@ -660,7 +632,7 @@
         renderResults(sortedData);
       }
       
-      logToConsole(`Sorted by ${column} ${currentSort.direction}`, 'info');
+      // Sort applied (no logging needed)
     }
 
     function renderThemeList() {
@@ -768,7 +740,6 @@
       if (!token || !org) return;
       
       status('Searching for orders with Status=7200...');
-      logToConsole(`\n=== Loading Orders ===`, 'info');
       const res = await api('searchOrders', { org, token });
       
       if (!res.success) {
@@ -792,16 +763,9 @@
       }
       
       ordersData = res.results || [];
-      logToConsole(`\n=== Orders Data Received ===`, 'info');
-      logToConsole(`Total orders: ${ordersData.length}`, 'info');
-      if (ordersData.length > 0) {
-        logToConsole(`First order structure:`, 'info');
-        logToConsole(JSON.stringify(ordersData[0], null, 2), 'info');
-      }
       
       // Filter out orders with OlpnCount = 0
       ordersData = ordersData.filter(order => (order.OlpnCount || 0) > 0);
-      logToConsole(`After filtering orders with oLPN count > 0: ${ordersData.length} orders`, 'info');
       
       // Update DivertDateTime to be within last 2 hours in user's timezone
       const now = new Date();
@@ -831,7 +795,6 @@
       }
       
       status(`Found ${ordersData.length} orders`, 'success');
-      logToConsole(`Found ${ordersData.length} orders to display`, 'success');
       
       // Apply saved sort
       const sortedData = sortOrders(ordersData, currentSort.column, currentSort.direction);
@@ -850,11 +813,7 @@
         return;
       }
       
-      logToConsole(`\n=== Rendering ${results.length} orders ===`, 'info');
-      
-      results.forEach((order, index) => {
-        logToConsole(`Order ${index + 1}: ${JSON.stringify(order, null, 2)}`, 'info');
-        
+      results.forEach((order) => {
         const row = document.createElement('tr');
         row.dataset.orderId = order.OrderId;
         
@@ -868,8 +827,6 @@
         row.onclick = () => selectRow(row, order);
         resultsBody.appendChild(row);
       });
-      
-      logToConsole(`Rendered ${results.length} rows in table`, 'success');
     }
 
     // Select row
@@ -911,7 +868,6 @@
 
     // Initialize on page load
     window.addEventListener('DOMContentLoaded', () => {
-      logToConsole(`Banding ${APP_VERSION} initialized`, 'success');
       
       // Load theme and sort preferences
       loadTheme();
@@ -932,8 +888,6 @@
       
       // Check for Organization parameter in URL and auto-authenticate
       if (urlOrg && urlOrg.trim()) {
-        logToConsole(`Organization parameter detected in URL: ${urlOrg.trim()}. Auto-authenticating...`, 'info');
-        
         // Populate the input field
         if (orgInput) {
           orgInput.value = urlOrg.trim();
