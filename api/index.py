@@ -212,13 +212,15 @@ def search_orders_endpoint():
         # Generate random divert date/time
         divert_datetime = generate_random_divert_time()
         
-        results.append({
+        result_item = {
             "OrderId": order_id,
             "Location": location or "",
             "OlpnCount": len(unique_olpns),
             "SVIA": svia or "",
             "DivertDateTime": divert_datetime
-        })
+        }
+        print(f"[RESULT] Order: {order_id}, Location: {location}, OlpnCount: {len(unique_olpns)}, SVIA: {svia}, DivertDateTime: {divert_datetime}")
+        results.append(result_item)
     
     return jsonify({
         "success": True,

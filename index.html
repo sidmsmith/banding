@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Banding v1.0.0</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <style>
     :root {
@@ -29,6 +29,8 @@
       --input-focus-bg: #333;
       --input-focus-border: var(--primary);
       --input-focus-shadow: rgba(13, 110, 253, 0.25);
+      --logo-url: none;
+      --logo-display: none;
     }
 
     body { 
@@ -150,13 +152,97 @@
     /* HEADER SECTION */
     .header-section {
       margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    /* THEME SELECTOR */
+    .theme-selector-btn {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: none;
+      border: none;
+      color: var(--text);
+      padding: 0;
+      cursor: pointer;
+      font-size: 1.5rem;
+      z-index: 1000;
+      transition: opacity 0.2s;
+    }
+    .theme-selector-btn:hover {
+      opacity: 0.7;
+    }
+
+    /* LOGO */
+    .theme-logo {
+      display: var(--logo-display);
+      max-height: 60px;
+      max-width: 200px;
+      margin: 0 auto 1rem;
+      object-fit: contain;
+    }
+
+    .header-with-logo {
+      position: relative;
+    }
+
+    /* Console Output */
+    .console-output {
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #0f0;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8em;
+      padding: 0.75rem;
+      height: 300px;
+      overflow-y: auto;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .console-output .error { color: var(--red-text); }
+    .console-output .success { color: #51cf66; }
+    .console-output .info { color: var(--blue-select); }
+    .console-output .warning { color: #ffd43b; }
+
+    /* MODAL */
+    .modal-content {
+      background-color: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .modal-header, .modal-footer {
+      border-color: var(--border);
+    }
+
+    .section-frame {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      background: var(--card-bg);
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
     }
   </style>
 </head>
 <body>
   <div class="main-container">
     <div class="header-section">
-      <h2 class="text-center mb-4">Banding v1.0.0</h2>
+      <button class="theme-selector-btn" id="themeSelectorBtn" title="Select Theme">
+        <i class="fas fa-cog"></i>
+      </button>
+      <div class="header-with-logo">
+        <img id="themeLogo" class="theme-logo" alt="Theme Logo" />
+        <h2 class="text-center mb-4">Banding v1.0.0</h2>
+      </div>
     </div>
 
     <!-- ORG -->
@@ -194,32 +280,110 @@
         <div><strong>Selected:</strong> <span id="selected">None</span></div>
         <button id="selectOrderBtn" class="btn btn-success" disabled>Select Order</button>
       </div>
+
+      <!-- Console Toggle Button -->
+      <div class="text-center mt-3" id="consoleToggleContainer">
+        <button class="btn btn-sm btn-outline-secondary" id="consoleToggleBtn" type="button" title="Toggle Console">
+          <i class="fas fa-terminal" id="consoleToggleIcon"></i> Console
+        </button>
+      </div>
+
+      <!-- Console Window -->
+      <div id="consoleSection" class="mt-4" style="display:none;">
+        <div class="section-frame">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="section-title">Console</div>
+            <button class="btn btn-sm btn-outline-secondary" id="consoleCloseBtn" type="button" title="Hide Console">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="console-output" id="console"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THEME SELECTOR MODAL -->
+  <div class="modal fade" id="themeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Select Theme</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="list-group" id="themeList"></div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
+    const APP_VERSION = 'v1.0.0';
+    
+    // URL Parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const organizationParam = urlParams.get('Organization');
+    const orgParam = urlParams.get('ORG');
+    const consoleParam = urlParams.get('Console');
+    
+    const urlOrg = organizationParam || orgParam || null;
+    const urlConsole = consoleParam || null;
+
     const orgInput = document.getElementById('org');
     const mainUI = document.getElementById('mainUI');
     const resultsBody = document.querySelector('#resultsTable tbody');
     const statusEl = document.getElementById('status');
     const selectedEl = document.getElementById('selected');
     const selectOrderBtn = document.getElementById('selectOrderBtn');
+    const consoleSection = document.getElementById('consoleSection');
+    const consoleEl = document.getElementById('console');
+    const consoleToggleBtn = document.getElementById('consoleToggleBtn');
+    const consoleCloseBtn = document.getElementById('consoleCloseBtn');
+    const consoleToggleContainer = document.getElementById('consoleToggleContainer');
+    const themeSelectorBtn = document.getElementById('themeSelectorBtn');
+    const themeModal = new bootstrap.Modal(document.getElementById('themeModal'));
+    const themeList = document.getElementById('themeList');
+    const themeLogo = document.getElementById('themeLogo');
 
     let token = null;
     let org = null;
     let selectedOrder = null;
     let ordersData = [];
 
-    // API helper
+    // Console logging function
+    function logToConsole(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+      if (consoleEl) {
+        consoleEl.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      }
+      // Also log to browser console
+      console.log(`[${timestamp}] ${message}`);
+    }
+
+    // API helper with logging
     async function api(endpoint, data) {
       try {
+        logToConsole(`[API] Calling ${endpoint}...`, 'info');
+        logToConsole(`[API] Request Payload:`, 'info');
+        logToConsole(JSON.stringify(data, null, 2), 'info');
+        
         const res = await fetch(`/api/${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
-        return await res.json();
+        
+        const result = await res.json();
+        
+        logToConsole(`[API] Response:`, result.success ? 'success' : 'error');
+        logToConsole(JSON.stringify(result, null, 2), result.success ? 'success' : 'error');
+        
+        return result;
       } catch (error) {
+        logToConsole(`[API] Exception: ${error.message}`, 'error');
         return { success: false, error: error.message };
       }
     }
@@ -230,6 +394,191 @@
       statusEl.className = 'status' + (type ? ` ${type}` : '');
     }
 
+    // THEME DEFINITIONS
+    const themes = {
+      'dark': {
+        name: 'Dark',
+        colors: {
+          '--bg-dark': '#121212',
+          '--card-bg': '#1e1e1e',
+          '--input-bg': '#2d2d2d',
+          '--border': '#333',
+          '--text': '#e0e0e0',
+          '--text-secondary': '#bbbbbb',
+          '--text-muted': '#999',
+          '--red-bg': '#4a1a1a',
+          '--red-text': '#ff6b6b',
+          '--blue-select': '#339af0',
+          '--success': '#28a745',
+          '--primary': '#0d6efd',
+          '--primary-hover': '#0b5ed7',
+          '--success-hover': '#218838',
+          '--table-header-bg': '#2a2a2a',
+          '--table-header-text': '#e0e0e0',
+          '--input-border': '#444',
+          '--input-focus-bg': '#333',
+          '--input-focus-border': '#0d6efd',
+          '--input-focus-shadow': 'rgba(13, 110, 253, 0.25)',
+          '--logo-url': 'none',
+          '--logo-display': 'none'
+        },
+        logo: null
+      },
+      'light': {
+        name: 'Light',
+        colors: {
+          '--bg-dark': '#f8f9fa',
+          '--card-bg': '#ffffff',
+          '--input-bg': '#f5f5f5',
+          '--border': '#dee2e6',
+          '--text': '#212529',
+          '--text-secondary': '#495057',
+          '--text-muted': '#6c757d',
+          '--red-bg': '#fff5f5',
+          '--red-text': '#dc3545',
+          '--blue-select': '#0056b3',
+          '--success': '#28a745',
+          '--primary': '#0d6efd',
+          '--primary-hover': '#0b5ed7',
+          '--success-hover': '#218838',
+          '--table-header-bg': '#6c757d',
+          '--table-header-text': '#ffffff',
+          '--input-border': '#ced4da',
+          '--input-focus-bg': '#ffffff',
+          '--input-focus-border': '#0d6efd',
+          '--input-focus-shadow': 'rgba(13, 110, 253, 0.25)',
+          '--logo-url': 'none',
+          '--logo-display': 'none'
+        },
+        logo: null
+      },
+      'manhattan': {
+        name: 'Manhattan Associates',
+        colors: {
+          '--bg-dark': '#f5f7fa',
+          '--card-bg': '#ffffff',
+          '--input-bg': '#f0f2f5',
+          '--border': '#e1e8ed',
+          '--text': '#1a1a1a',
+          '--text-secondary': '#4a5568',
+          '--text-muted': '#718096',
+          '--red-bg': '#fff5f5',
+          '--red-text': '#e53e3e',
+          '--blue-select': '#3182ce',
+          '--success': '#38a169',
+          '--primary': '#0066cc',
+          '--primary-hover': '#0052a3',
+          '--success-hover': '#2f855a',
+          '--table-header-bg': '#0066cc',
+          '--table-header-text': '#ffffff',
+          '--input-border': '#cbd5e0',
+          '--input-focus-bg': '#ffffff',
+          '--input-focus-border': '#0066cc',
+          '--input-focus-shadow': 'rgba(0, 102, 204, 0.25)',
+          '--logo-url': 'url("/manhattan-logo.png")',
+          '--logo-display': 'block'
+        },
+        logo: '/manhattan-logo.png'
+      }
+    };
+
+    // THEME FUNCTIONS
+    function applyTheme(themeKey) {
+      const theme = themes[themeKey];
+      if (!theme) return;
+
+      const root = document.documentElement;
+      Object.entries(theme.colors).forEach(([property, value]) => {
+        root.style.setProperty(property, value);
+      });
+
+      // Update logo
+      if (theme.logo) {
+        themeLogo.src = theme.logo;
+        themeLogo.style.display = 'block';
+      } else {
+        themeLogo.style.display = 'none';
+      }
+
+      // Update table class for light themes
+      const table = document.getElementById('resultsTable');
+      if (themeKey === 'dark') {
+        table.className = 'table table-dark table-hover';
+      } else {
+        table.className = 'table table-hover';
+      }
+
+      // Save to localStorage
+      localStorage.setItem('selectedTheme', themeKey);
+    }
+
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('selectedTheme') || 'dark';
+      applyTheme(savedTheme);
+    }
+
+    function renderThemeList() {
+      if (!themeList) return;
+      themeList.innerHTML = '';
+      const currentTheme = localStorage.getItem('selectedTheme') || 'dark';
+      
+      Object.entries(themes).forEach(([key, theme]) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = `list-group-item list-group-item-action ${key === currentTheme ? 'active' : ''}`;
+        item.textContent = theme.name;
+        item.onclick = () => {
+          applyTheme(key);
+          themeModal.hide();
+        };
+        themeList.appendChild(item);
+      });
+    }
+
+    // Initialize theme selector
+    if (themeSelectorBtn) {
+      themeSelectorBtn.onclick = () => {
+        renderThemeList();
+        themeModal.show();
+      };
+    }
+
+    // Console toggle
+    if (consoleToggleBtn) {
+      consoleToggleBtn.addEventListener('click', () => {
+        if (consoleSection) {
+          const isHidden = consoleSection.style.display === 'none' || !consoleSection.style.display;
+          consoleSection.style.display = isHidden ? 'block' : 'none';
+        }
+      });
+    }
+
+    if (consoleCloseBtn) {
+      consoleCloseBtn.addEventListener('click', () => {
+        if (consoleSection) {
+          consoleSection.style.display = 'none';
+        }
+      });
+    }
+
+    // Check for Console parameter and handle visibility
+    if (urlConsole) {
+      const consoleValue = urlConsole.toUpperCase();
+      if (consoleValue === 'Y') {
+        if (consoleSection) {
+          consoleSection.style.display = 'block';
+          logToConsole('Console window opened via URL parameter (Console=Y)', 'info');
+        }
+      } else if (consoleValue === 'N') {
+        if (consoleToggleContainer) {
+          consoleToggleContainer.style.display = 'none';
+        }
+        if (consoleSection) {
+          consoleSection.style.display = 'none';
+        }
+      }
+    }
+
     // Auth
     orgInput.addEventListener('keypress', async e => {
       if (e.key !== 'Enter') return;
@@ -237,15 +586,18 @@
       if (!orgValue) return status('ORG required', 'error');
       
       status('Authenticating...');
+      logToConsole(`\n=== Authentication ===`, 'info');
       const res = await api('auth', { org: orgValue });
       
       if (!res.success) {
-        return status(res.error || 'Auth failed', 'error');
+        status(res.error || 'Auth failed', 'error');
+        return;
       }
       
       token = res.token;
       org = orgValue;
       status('Authenticated – ready! Loading orders...', 'success');
+      logToConsole(`Authentication successful for ORG: ${org}`, 'success');
       
       mainUI.style.display = 'block';
       
@@ -258,13 +610,16 @@
       if (!token || !org) return;
       
       status('Searching for orders with Status=7200...');
+      logToConsole(`\n=== Loading Orders ===`, 'info');
       const res = await api('searchOrders', { org, token });
       
       if (!res.success) {
-        return status('Failed to load orders: ' + (res.error || 'Unknown error'), 'error');
+        status('Failed to load orders: ' + (res.error || 'Unknown error'), 'error');
+        return;
       }
       
       ordersData = res.results || [];
+      logToConsole(`Orders data received: ${JSON.stringify(ordersData, null, 2)}`, 'info');
       
       if (ordersData.length === 0) {
         status('No orders found with Status=7200', 'error');
@@ -273,6 +628,7 @@
       }
       
       status(`Found ${ordersData.length} orders`, 'success');
+      logToConsole(`Found ${ordersData.length} orders to display`, 'success');
       renderResults(ordersData);
     }
 
@@ -287,7 +643,11 @@
         return;
       }
       
-      results.forEach(order => {
+      logToConsole(`\n=== Rendering ${results.length} orders ===`, 'info');
+      
+      results.forEach((order, index) => {
+        logToConsole(`Order ${index + 1}: ${JSON.stringify(order, null, 2)}`, 'info');
+        
         const row = document.createElement('tr');
         row.dataset.orderId = order.OrderId;
         
@@ -301,6 +661,8 @@
         row.onclick = () => selectRow(row, order);
         resultsBody.appendChild(row);
       });
+      
+      logToConsole(`Rendered ${results.length} rows in table`, 'success');
     }
 
     // Select row
@@ -315,19 +677,43 @@
       selectedOrder = order;
       selectedEl.textContent = order.OrderId || 'None';
       selectOrderBtn.disabled = false;
+      logToConsole(`Selected order: ${order.OrderId}`, 'info');
     }
 
     // Select Order button
     selectOrderBtn.onclick = () => {
       if (!selectedOrder) return;
       
+      logToConsole(`\n=== Select Order Clicked ===`, 'info');
+      logToConsole(`Selected Order: ${selectedOrder.OrderId}`, 'info');
+      
       // Navigate to order detail page (to be implemented)
-      // For now, just show an alert
       alert(`Selected Order: ${selectedOrder.OrderId}\n\nOrder detail page to be implemented.`);
       
       // TODO: Navigate to order detail page
       // window.location.href = `/order/${selectedOrder.OrderId}`;
     };
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      logToConsole(`Banding ${APP_VERSION} initialized`, 'success');
+      
+      // Load theme
+      loadTheme();
+      
+      // Check for Organization parameter in URL and auto-authenticate
+      if (urlOrg && urlOrg.trim()) {
+        logToConsole(`Organization parameter detected in URL: ${urlOrg.trim()}. Auto-authenticating...`, 'info');
+        
+        // Populate the input field
+        if (orgInput) {
+          orgInput.value = urlOrg.trim();
+        }
+        
+        // Auto-authenticate
+        orgInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter' }));
+      }
+    });
   </script>
 </body>
 </html>
