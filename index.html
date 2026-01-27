@@ -259,7 +259,7 @@
     </div>
 
     <!-- ORG -->
-    <div class="mb-3">
+    <div id="orgSection" class="mb-3">
       <label class="form-label">ORG:</label>
       <input type="text" id="org" class="form-control" placeholder="Enter ORG" maxlength="20" />
       <small>Press Enter to authenticate</small>
@@ -509,10 +509,10 @@
           '--input-focus-bg': '#ffffff',
           '--input-focus-border': '#0066cc',
           '--input-focus-shadow': 'rgba(0, 102, 204, 0.25)',
-          '--logo-url': 'url("/manhattan-logo.png")',
+          '--logo-url': 'url("manhattan-logo.png")',
           '--logo-display': 'block'
         },
-        logo: '/manhattan-logo.png'
+        logo: 'manhattan-logo.png'
       }
     };
 
@@ -528,18 +528,43 @@
 
       // Update logo
       if (theme.logo && themeLogo) {
-        // Use absolute path from root
-        const logoPath = theme.logo.startsWith('/') ? theme.logo : '/' + theme.logo;
-        themeLogo.src = logoPath;
-        themeLogo.style.display = 'block';
-        themeLogo.onerror = function() {
-          console.warn(`Logo not found: ${logoPath}`);
-          logToConsole(`Logo not found: ${logoPath}`, 'warning');
-          this.style.display = 'none';
+        // Try multiple path variations
+        const logoPaths = [
+          theme.logo,
+          '/' + theme.logo,
+          './' + theme.logo,
+          '../' + theme.logo
+        ];
+        
+        let logoLoaded = false;
+        let currentPathIndex = 0;
+        
+        const tryLoadLogo = (pathIndex) => {
+          if (pathIndex >= logoPaths.length) {
+            console.warn(`Logo not found in any of the attempted paths`);
+            logToConsole(`Logo not found. Tried: ${logoPaths.join(', ')}`, 'warning');
+            themeLogo.style.display = 'none';
+            return;
+          }
+          
+          const logoPath = logoPaths[pathIndex];
+          themeLogo.src = logoPath;
+          
+          themeLogo.onerror = function() {
+            // Try next path
+            tryLoadLogo(pathIndex + 1);
+          };
+          
+          themeLogo.onload = function() {
+            if (!logoLoaded) {
+              logoLoaded = true;
+              logToConsole(`Logo loaded: ${logoPath}`, 'success');
+              themeLogo.style.display = 'block';
+            }
+          };
         };
-        themeLogo.onload = function() {
-          logToConsole(`Logo loaded: ${logoPath}`, 'success');
-        };
+        
+        tryLoadLogo(0);
       } else if (themeLogo) {
         themeLogo.style.display = 'none';
       }
@@ -720,6 +745,12 @@
       status('Authenticated – ready! Loading orders...', 'success');
       logToConsole(`Authentication successful for ORG: ${org}`, 'success');
       
+      // Hide ORG section after successful authentication
+      const orgSection = document.getElementById('orgSection');
+      if (orgSection) {
+        orgSection.style.display = 'none';
+      }
+      
       mainUI.style.display = 'block';
       
       // Initialize table headers after UI is shown
@@ -768,8 +799,33 @@
         logToConsole(JSON.stringify(ordersData[0], null, 2), 'info');
       }
       
+      // Filter out orders with OlpnCount = 0
+      ordersData = ordersData.filter(order => (order.OlpnCount || 0) > 0);
+      logToConsole(`After filtering orders with oLPN count > 0: ${ordersData.length} orders`, 'info');
+      
+      // Update DivertDateTime to be within last 2 hours in user's timezone
+      const now = new Date();
+      ordersData.forEach(order => {
+        // Generate random time within last 2 hours (not in future)
+        const hoursAgo = Math.random() * 2; // 0 to 2 hours
+        const minutesAgo = Math.random() * 60; // 0 to 60 minutes
+        const secondsAgo = Math.random() * 60; // 0 to 60 seconds
+        
+        const divertTime = new Date(now.getTime() - (hoursAgo * 3600 + minutesAgo * 60 + secondsAgo) * 1000);
+        
+        // Format as YYYY-MM-DD HH:MM:SS in user's local timezone
+        const year = divertTime.getFullYear();
+        const month = String(divertTime.getMonth() + 1).padStart(2, '0');
+        const day = String(divertTime.getDate()).padStart(2, '0');
+        const hours = String(divertTime.getHours()).padStart(2, '0');
+        const minutes = String(divertTime.getMinutes()).padStart(2, '0');
+        const seconds = String(divertTime.getSeconds()).padStart(2, '0');
+        
+        order.DivertDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      });
+      
       if (ordersData.length === 0) {
-        status('No orders found with Status=7200', 'error');
+        status('No orders found with Status=7200 (or all orders have 0 oLPNs)', 'error');
         renderResults([]);
         return;
       }

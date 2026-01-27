@@ -291,8 +291,9 @@ def search_orders_endpoint():
         if not svia and order_olpns:
             svia = order_olpns[0].get("ShipViaId") or order_olpns[0].get("shipViaId") or order_olpns[0].get("ShipVia")
         
-        # Generate random divert date/time
-        divert_datetime = generate_random_divert_time()
+        # DivertDateTime will be generated in frontend using user's timezone
+        # Placeholder value (will be replaced in frontend)
+        divert_datetime = ""
         
         result_item = {
             "OrderId": order_id,
@@ -301,7 +302,7 @@ def search_orders_endpoint():
             "SVIA": svia or "",
             "DivertDateTime": divert_datetime
         }
-        print(f"[RESULT] Order: {order_id}, Location: {location}, OlpnCount: {len(unique_olpns)}, SVIA: {svia}, DivertDateTime: {divert_datetime}")
+        print(f"[RESULT] Order: {order_id}, Location: {location}, OlpnCount: {len(unique_olpns)}, SVIA: {svia}, DivertDateTime: (will be set in frontend)")
         results.append(result_item)
     
     print(f"[SEARCH_ORDERS_ENDPOINT] Returning {len(results)} results")
