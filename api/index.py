@@ -111,10 +111,10 @@ def search_olpns(order_ids, headers, org):
         "selectedLocation": facility_id
     })
     
-    # Format order IDs for query (comma-separated, single-quoted)
+    # Format order IDs for query (comma-separated, single-quoted, in parentheses)
     order_ids_str = "', '".join(order_ids)
     payload = {
-        "Query": f"OrderId in '{order_ids_str}'",
+        "Query": f"OrderId in ('{order_ids_str}')",
         "Size": 1000,
         "Page": 0
     }
@@ -234,7 +234,7 @@ def search_orders_endpoint():
     olpn_search_url = f"https://{API_HOST}/pickpack/api/pickpack/olpn/search"
     order_ids_str = "', '".join(order_ids)
     olpn_search_payload = {
-        "Query": f"OrderId in '{order_ids_str}'",
+        "Query": f"OrderId in ('{order_ids_str}')",
         "Size": 1000,
         "Page": 0
     }
