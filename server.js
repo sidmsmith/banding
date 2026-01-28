@@ -44,7 +44,8 @@ app.get(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i, (req, res, next) => {
 });
 
 // Catch-all for SPA routing (must be last)
-app.get('*', (req, res) => {
+// Use regex pattern instead of '*' to avoid path-to-regexp errors on Vercel
+app.get(/^(?!\/api).*$/, (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
