@@ -33,9 +33,20 @@ app.get(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i, (req, res, next) => {
     return res.status(404).send('Not found');
   }
   
-  const filePath = path.join(__dirname, req.path);
-  // Try to serve the file
-  res.sendFile(filePath, (err) => {
+  // Try public directory first (Vercel serves this automatically)
+  const publicPath = path.join(__dirname, 'public', req.path);
+  if (fs.existsSync(publicPath)) {
+    return res.sendFile(publicPath, (err) => {
+      if (err) {
+        console.error('Error serving file from public:', err);
+        res.status(404).send('File not found');
+      }
+    });
+  }
+  
+  // Fallback to root directory
+  const rootPath = path.join(__dirname, req.path);
+  res.sendFile(rootPath, (err) => {
     if (err) {
       console.error('Error serving static file:', err);
       res.status(404).send('File not found');
