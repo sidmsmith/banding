@@ -16,23 +16,36 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicitly serve image files (before catch-all) - must come before catch-all route
 app.get(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i, (req, res) => {
-  // Try root directory first
-  const rootPath = path.join(__dirname, req.path);
-  console.log('Attempting to serve image:', req.path, 'from:', rootPath);
-  
-  if (fs.existsSync(rootPath)) {
-    console.log('Image found at:', rootPath);
-    return res.sendFile(rootPath);
+  try {
+    // Try root directory first
+    const rootPath = path.join(__dirname, req.path);
+    
+    if (fs.existsSync(rootPath)) {
+      return res.sendFile(rootPath, (err) => {
+        if (err) {
+          console.error('Error sending file:', rootPath, err);
+          res.status(404).send('File not found');
+        }
+      });
+    }
+    
+    // Try public directory
+    const publicPath = path.join(__dirname, 'public', req.path);
+    if (fs.existsSync(publicPath)) {
+      return res.sendFile(publicPath, (err) => {
+        if (err) {
+          console.error('Error sending file:', publicPath, err);
+          res.status(404).send('File not found');
+        }
+      });
+    }
+    
+    // Not found - return 404 for missing images (don't crash)
+    res.status(404).send('Image not found');
+  } catch (error) {
+    console.error('Error in image handler:', error);
+    res.status(500).send('Internal server error');
   }
-  // Try public directory
-  const publicPath = path.join(__dirname, 'public', req.path);
-  if (fs.existsSync(publicPath)) {
-    console.log('Image found at:', publicPath);
-    return res.sendFile(publicPath);
-  }
-  // Not found
-  console.error('Image not found:', req.path, 'Tried:', rootPath, 'and', publicPath);
-  res.status(404).json({ error: 'Image not found', path: req.path, tried: [rootPath, publicPath] });
 });
 
 // Proxy all /api calls to Flask (running on localhost:5000 during dev)
