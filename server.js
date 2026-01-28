@@ -28,6 +28,11 @@ app.post('/api/:action', async (req, res) => {
 
 // Handle image files explicitly (for Vercel serverless)
 app.get(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i, (req, res, next) => {
+  // Skip favicon.ico - let it 404 gracefully
+  if (req.path === '/favicon.ico') {
+    return res.status(404).send('Not found');
+  }
+  
   const filePath = path.join(__dirname, req.path);
   // Try to serve the file
   res.sendFile(filePath, (err) => {
