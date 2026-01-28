@@ -7,8 +7,33 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 
 // Serve static files from both root and public directory
-app.use(express.static(__dirname));
+// IMPORTANT: Static files must be served BEFORE the catch-all route
+app.use(express.static(__dirname, { 
+  extensions: ['html', 'css', 'js'],
+  index: false // Don't serve index.html for directories
+}));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Explicitly serve image files (before catch-all) - must come before catch-all route
+app.get(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i, (req, res) => {
+  // Try root directory first
+  const rootPath = path.join(__dirname, req.path);
+  console.log('Attempting to serve image:', req.path, 'from:', rootPath);
+  
+  if (fs.existsSync(rootPath)) {
+    console.log('Image found at:', rootPath);
+    return res.sendFile(rootPath);
+  }
+  // Try public directory
+  const publicPath = path.join(__dirname, 'public', req.path);
+  if (fs.existsSync(publicPath)) {
+    console.log('Image found at:', publicPath);
+    return res.sendFile(publicPath);
+  }
+  // Not found
+  console.error('Image not found:', req.path, 'Tried:', rootPath, 'and', publicPath);
+  res.status(404).json({ error: 'Image not found', path: req.path, tried: [rootPath, publicPath] });
+});
 
 // Proxy all /api calls to Flask (running on localhost:5000 during dev)
 app.post('/api/:action', async (req, res) => {
@@ -26,19 +51,7 @@ app.post('/api/:action', async (req, res) => {
   }
 });
 
-// Handle image files explicitly (for Vercel serverless)
-app.get(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/i, (req, res, next) => {
-  const filePath = path.join(__dirname, req.path);
-  // Try to serve the file
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      console.error('Error serving static file:', err);
-      res.status(404).send('File not found');
-    }
-  });
-});
-
-// Catch-all for SPA routing (must be last)
+// Catch-all for SPA routing (must be last, after all static file handlers)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
