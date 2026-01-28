@@ -192,7 +192,10 @@
       object-fit: contain;
     }
     .theme-logo[src] {
-      display: block;
+      display: block !important;
+    }
+    .theme-logo:not([src]) {
+      display: none !important;
     }
 
     .header-with-logo {
@@ -531,14 +534,47 @@
       // Update logo
       if (theme.logo && themeLogo) {
         // Logo is in root directory, server serves static files from root
-        themeLogo.src = '/' + theme.logo;
+        const logoPath = '/' + theme.logo;
+        console.log('Setting logo src to:', logoPath);
+        console.log('Theme logo value:', theme.logo);
+        console.log('Current theme:', themeKey);
+        
+        // Set src and display
+        themeLogo.src = logoPath;
         themeLogo.style.display = 'block';
-        themeLogo.onerror = function() {
-          // Silently hide if logo not found
+        themeLogo.style.visibility = 'visible';
+        
+        // Remove any existing event listeners by cloning
+        const oldOnError = themeLogo.onerror;
+        const oldOnLoad = themeLogo.onload;
+        themeLogo.onerror = null;
+        themeLogo.onload = null;
+        
+        themeLogo.onerror = function(e) {
+          // Log error and show in UI console
+          const errorMsg = `Logo failed to load: ${logoPath}. Check Network tab for 404 error.`;
+          console.error(errorMsg, e);
+          logToConsole(errorMsg, 'error');
           this.style.display = 'none';
         };
-      } else if (themeLogo) {
-        themeLogo.style.display = 'none';
+        
+        themeLogo.onload = function() {
+          console.log('Logo loaded successfully:', logoPath, 'Size:', this.naturalWidth, 'x', this.naturalHeight);
+          logToConsole(`Logo loaded successfully: ${logoPath}`, 'success');
+          this.style.display = 'block';
+        };
+        
+        // If image is already cached and loaded, trigger onload manually
+        if (themeLogo.complete && themeLogo.naturalHeight !== 0) {
+          themeLogo.onload();
+        }
+      } else {
+        if (themeLogo) {
+          console.log('No logo for theme:', themeKey, 'theme.logo:', theme.logo);
+          themeLogo.style.display = 'none';
+        } else {
+          console.error('themeLogo element not found in DOM');
+        }
       }
 
       // Update table class for light themes
@@ -555,7 +591,22 @@
 
     function loadTheme() {
       const savedTheme = localStorage.getItem('selectedTheme') || 'dark';
+      console.log('Loading theme:', savedTheme);
+      console.log('themeLogo element:', themeLogo);
+      console.log('Theme logo path:', themes[savedTheme]?.logo);
       applyTheme(savedTheme);
+      
+      // Force logo check after a short delay to ensure DOM is ready
+      setTimeout(() => {
+        if (themeLogo) {
+          console.log('Logo src after theme apply:', themeLogo.src);
+          console.log('Logo display style:', themeLogo.style.display);
+          console.log('Logo computed display:', window.getComputedStyle(themeLogo).display);
+          if (themeLogo.src && !themeLogo.complete) {
+            console.log('Logo image not yet loaded, waiting...');
+          }
+        }
+      }, 100);
       
       // Load saved sort preference
       const savedSort = localStorage.getItem('bandingSort');
