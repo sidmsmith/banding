@@ -65,7 +65,7 @@ app.post('/api/:action', async (req, res) => {
 });
 
 // Catch-all for SPA routing (must be last, after all static file handlers)
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
