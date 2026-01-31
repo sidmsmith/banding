@@ -1158,6 +1158,21 @@
       input.addEventListener('change', syncOrderDetailButtonState);
     });
 
+    // Enter in Add oLPN to Bundle input clicks Add button (if enabled)
+    addOlpnToBundleInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!updateBundleBtn.disabled) updateBundleBtn.click();
+      }
+    });
+    // Enter in Remove oLPN from Bundle input clicks Remove button (if enabled)
+    removeOlpnFromBundleInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!removeFromBundleBtn.disabled) removeFromBundleBtn.click();
+      }
+    });
+
     // Add oLPN to Bundle: flow is (1) Combine API first, (2) only if success update CombinedOlpns.
     // We build the CombinedOlpns payload BEFORE the Combine API because after the combine, the FromOlpnId
     // oLPN will have changed (status, items, quantity). We must record the ORIGINAL add-record data.
@@ -1386,6 +1401,7 @@
       removeFromBundleBtn.disabled = true;
       const errors = [];
       let successCount = 0;
+      const detailsCount = details.length;
 
       for (let i = 0; i < details.length; i++) {
         const d = details[i];
@@ -1442,13 +1458,13 @@
       setOrderDetailStatus('Refreshing list...', 'info');
       await refreshOrderDetailOlpns();
 
-      if (successCount === details.length) {
+      if (successCount === detailsCount) {
         const msg = `oLPN ${removeValue} removed from bundle ${bundleValue}.`;
         status(msg, 'success');
         setOrderDetailStatus(msg, 'success');
       } else if (successCount > 0) {
         const errMsg = errors.length ? ` ${errors.join('; ')}` : '';
-        const msg = `oLPN ${removeValue} removed from bundle ${bundleValue} (${successCount}/${details.length} item(s)).${errMsg}`;
+        const msg = `oLPN ${removeValue} removed from bundle ${bundleValue} (${successCount}/${detailsCount} item(s)).${errMsg}`;
         status(msg, 'error');
         setOrderDetailStatus(msg, 'error');
       } else {
