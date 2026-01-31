@@ -434,9 +434,12 @@
     const organizationParam = urlParams.get('Organization');
     const orgParam = urlParams.get('ORG');
     const consoleParam = urlParams.get('Console');
+    const orderParam = urlParams.get('Order');
+    const orderIdParam = urlParams.get('OrderId');
     
     const urlOrg = organizationParam || orgParam || null;
     const urlConsole = consoleParam || null;
+    const urlOrder = orderParam || orderIdParam || null;
 
     const orgInput = document.getElementById('org');
     const mainUI = document.getElementById('mainUI');
@@ -966,6 +969,18 @@
       const sortedData = sortOrders(ordersData, currentSort.column, currentSort.direction);
       updateSortIndicators();
       renderResults(sortedData);
+
+      // URL Order/OrderId: if present and order exists in list, auto-select and open Order Detail
+      if (urlOrder && urlOrder.trim()) {
+        const orderIdNorm = urlOrder.trim().toLowerCase();
+        const order = ordersData.find(o => (o.OrderId || o.orderId || '').toString().trim().toLowerCase() === orderIdNorm);
+        if (order) {
+          const orderIdVal = (order.OrderId || order.orderId || '').toString();
+          const row = resultsBody.querySelector(`tr[data-order-id="${CSS.escape(orderIdVal)}"]`);
+          if (row) selectRow(row, order);
+          await openOrderDetailScreen();
+        }
+      }
     }
 
     // Render results
@@ -1063,36 +1078,32 @@
       return { success: true, olpns };
     }
 
-    // Select Order button – show Order Detail screen and load oLPNs
-    selectOrderBtn.onclick = async () => {
+    // Open Order Detail screen: load oLPNs for selectedOrder and show detail (used by Select Order and URL Order param)
+    async function openOrderDetailScreen() {
       if (!selectedOrder || !token || !org) return;
-      
-      logToConsole(`\n=== Select Order Clicked ===`, 'info');
+      logToConsole(`\n=== Open Order Detail ===`, 'info');
       logToConsole(`Selected Order: ${selectedOrder.OrderId}`, 'info');
-      
       status('Loading oLPNs...');
       const res = await api('getOlpns', { org, token, orderId: selectedOrder.OrderId });
-      
       if (!res.success) {
         status('Failed to load oLPNs: ' + (res.error || 'Unknown error'), 'error');
         return;
       }
-      
       const olpns = res.olpns || [];
       currentOrderOlpns = olpns;
       logToConsole(`Loaded ${olpns.length} oLPNs for order ${selectedOrder.OrderId}`, 'info');
-      
       orderListScreen.style.display = 'none';
       orderDetailScreen.style.display = 'block';
-      
       orderDetailOrderId.value = selectedOrder.OrderId || '';
       scanOlpnInput.value = '';
       addOlpnToBundleInput.value = '';
       setOrderDetailStatus('');
       scanOlpnInput.focus();
-      
       renderOrderDetailTable(olpns);
-    };
+    }
+
+    // Select Order button – show Order Detail screen and load oLPNs
+    selectOrderBtn.onclick = () => openOrderDetailScreen();
 
     // Validate: check Bundle oLPN value exists in the oLPN list on the page (no API)
     validateOlpnBtn.onclick = () => {
