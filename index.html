@@ -1458,7 +1458,8 @@
       const refresh = await refreshOrderDetailOlpns();
 
       // After splits, clear Extended.CombinedOlpns on the To LPN (split-out oLPN) if Manhattan populated it.
-      // Do once after all items: get To LPN from refreshed list, set CombinedOlpns to "[]".
+      // Do once after all items: get To LPN from refreshed list, set CombinedOlpns to "[]", then refresh again
+      // so the table shows the To LPN without the bundle icon (avoids timing issue where first refresh showed old CombinedOlpns).
       if (successCount > 0 && refresh.success) {
         const toRecord = currentOrderOlpns.find(o => norm(o.OlpnId || o.olpnId || o.oLPNId || '') === removeNorm);
         if (toRecord) {
@@ -1466,6 +1467,8 @@
           const toPk = toPkRaw != null ? String(toPkRaw) : '';
           if (toPk) {
             await api('updateOlpnExtended', { org, token, olpnId: removeValue, pk: toPk, combinedOlpns: '[]' });
+            setOrderDetailStatus('Refreshing list again...', 'info');
+            await refreshOrderDetailOlpns();
           }
         }
       }
