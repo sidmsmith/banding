@@ -368,6 +368,27 @@ def get_olpns_endpoint():
         "olpns": olpns_filtered
     })
 
+@app.route('/api/getOlpnPk', methods=['POST'])
+def get_olpn_pk():
+    """Fetch PK for a single oLPN by order and OlpnId (no list refresh). Used to clear To LPN CombinedOlpns after Remove."""
+    org = request.json.get('org', '').strip()
+    token = request.json.get('token', '').strip()
+    order_id = request.json.get('orderId', '').strip()
+    olpn_id = request.json.get('olpnId', '').strip()
+    if not org or not token or not order_id or not olpn_id:
+        return jsonify({"success": False, "error": "ORG, token, orderId, and olpnId required"})
+    headers = {"Authorization": f"Bearer {token}"}
+    olpns = search_olpns([order_id], headers, org)
+    olpn_id_lower = olpn_id.lower()
+    for o in olpns:
+        oid = (o.get("OlpnId") or o.get("olpnId") or o.get("oLPNId") or "").__str__().strip().lower()
+        if oid == olpn_id_lower:
+            pk = o.get("PK") or o.get("Pk") or o.get("pk") or o.get("OlpnPk") or o.get("olpnPk")
+            if pk is not None:
+                return jsonify({"success": True, "pk": str(pk)})
+            break
+    return jsonify({"success": False, "error": "oLPN not found or missing PK"})
+
 def split_combine_olpn(headers, org, from_olpn_id, to_olpn_id):
     """
     Call Manhattan Split Combine API to combine FromOlpnId into ToOlpnId (bundle).

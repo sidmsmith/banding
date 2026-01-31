@@ -1429,25 +1429,18 @@
       removeFromBundleBtn.disabled = false;
       removeOlpnFromBundleInput.value = '';
       syncOrderDetailButtonState();
-      // First refresh: needed to get the To LPN's PK from the list (split-out oLPN appears after splits).
-      setOrderDetailStatus('Refreshing list...', 'info');
-      const refresh = await refreshOrderDetailOlpns();
 
-      // After splits, clear Extended.CombinedOlpns on the To LPN (split-out oLPN) if Manhattan populated it.
-      // Do once after all items: get To LPN from refreshed list, set CombinedOlpns to "[]", then refresh again
-      // so the table shows the To LPN without the bundle icon (avoids timing issue where first refresh showed old CombinedOlpns).
-      if (successCount > 0 && refresh.success) {
-        const toRecord = currentOrderOlpns.find(o => norm(o.OlpnId || o.olpnId || o.oLPNId || '') === removeNorm);
-        if (toRecord) {
-          const toPkRaw = toRecord.PK ?? toRecord.Pk ?? toRecord.pk ?? toRecord.OlpnPk ?? toRecord.olpnPk;
-          const toPk = toPkRaw != null ? String(toPkRaw) : '';
-          if (toPk) {
-            await api('updateOlpnExtended', { org, token, olpnId: removeValue, pk: toPk, combinedOlpns: '[]' });
-            setOrderDetailStatus('Refreshing list again...', 'info');
-            await refreshOrderDetailOlpns();
-          }
+      // Clear Extended.CombinedOlpns on the To LPN (split-out oLPN) without refreshing the screen.
+      // Get To LPN's PK via getOlpnPk (no UI refresh), then clear, then refresh once (no flashing/bad data).
+      if (successCount > 0) {
+        setOrderDetailStatus('Clearing To LPN...', 'info');
+        const pkRes = await api('getOlpnPk', { org, token, orderId: selectedOrder.OrderId, olpnId: removeValue });
+        if (pkRes.success && pkRes.pk) {
+          await api('updateOlpnExtended', { org, token, olpnId: removeValue, pk: pkRes.pk, combinedOlpns: '[]' });
         }
       }
+      setOrderDetailStatus('Refreshing list...', 'info');
+      await refreshOrderDetailOlpns();
 
       if (successCount === details.length) {
         const msg = `oLPN ${removeValue} removed from bundle ${bundleValue}.`;
