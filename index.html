@@ -363,7 +363,6 @@
             <label class="form-label">Bundle oLPN:</label>
             <div class="d-flex align-items-center gap-2">
               <input type="text" id="scanOlpnInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-              <button id="validateOlpnBtn" class="btn btn-primary" type="button" disabled>Validate</button>
             </div>
           </div>
           <div class="d-flex flex-column gap-2 flex-shrink-0 order-detail-unit-gap">
@@ -467,7 +466,6 @@
     const scanOlpnInput = document.getElementById('scanOlpnInput');
     const orderDetailTableBody = document.getElementById('orderDetailTableBody');
     const orderDetailBackBtn = document.getElementById('orderDetailBackBtn');
-    const validateOlpnBtn = document.getElementById('validateOlpnBtn');
     const addOlpnToBundleInput = document.getElementById('addOlpnToBundleInput');
     const updateBundleBtn = document.getElementById('updateBundleBtn');
     const removeOlpnFromBundleInput = document.getElementById('removeOlpnFromBundleInput');
@@ -1147,7 +1145,6 @@
       };
 
       const bundleValid = olpnIdInList(scanOlpnInput.value.trim());
-      validateOlpnBtn.disabled = !bundleValid;
       updateBundleBtn.disabled = !bundleValid || !olpnIdInList(addOlpnToBundleInput.value.trim());
       removeFromBundleBtn.disabled = !bundleValid || !removeValueInBundle(removeOlpnFromBundleInput.value.trim());
     }
@@ -1160,28 +1157,6 @@
       input.addEventListener('input', syncOrderDetailButtonState);
       input.addEventListener('change', syncOrderDetailButtonState);
     });
-
-    // Validate: check Bundle oLPN value exists in the oLPN list on the page (no API)
-    validateOlpnBtn.onclick = () => {
-      const value = scanOlpnInput.value.trim();
-      if (!value) {
-        status('Enter an oLPN in Bundle oLPN to validate', 'error');
-        setOrderDetailStatus('Enter an oLPN in Bundle oLPN to validate', 'error');
-        return;
-      }
-      const normalized = value.toLowerCase();
-      const found = currentOrderOlpns.some(olpn => {
-        const id = (olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '').toString().toLowerCase();
-        return id === normalized;
-      });
-      if (found) {
-        status(`oLPN "${value}" is valid and exists in the list`, 'success');
-        setOrderDetailStatus(`oLPN "${value}" is valid and exists in the list`, 'success');
-      } else {
-        status(`oLPN "${value}" was not found in the oLPN list`, 'error');
-        setOrderDetailStatus(`oLPN "${value}" was not found in the oLPN list`, 'error');
-      }
-    };
 
     // Add oLPN to Bundle: flow is (1) Combine API first, (2) only if success update CombinedOlpns.
     // We build the CombinedOlpns payload BEFORE the Combine API because after the combine, the FromOlpnId
@@ -1454,6 +1429,7 @@
       removeFromBundleBtn.disabled = false;
       removeOlpnFromBundleInput.value = '';
       syncOrderDetailButtonState();
+      // First refresh: needed to get the To LPN's PK from the list (split-out oLPN appears after splits).
       setOrderDetailStatus('Refreshing list...', 'info');
       const refresh = await refreshOrderDetailOlpns();
 
@@ -1474,15 +1450,18 @@
       }
 
       if (successCount === details.length) {
-        status(`Removed oLPN "${removeValue}" from bundle (${successCount} item(s)).`, 'success');
-        setOrderDetailStatus(`Removed oLPN "${removeValue}" from bundle (${successCount} item(s)).`, 'success');
+        const msg = `oLPN ${removeValue} removed from bundle ${bundleValue}.`;
+        status(msg, 'success');
+        setOrderDetailStatus(msg, 'success');
       } else if (successCount > 0) {
-        const errMsg = errors.length ? ` Partial: ${errors.join('; ')}` : '';
-        status(`Removed ${successCount}/${details.length} item(s) for "${removeValue}".${errMsg}`, 'error');
-        setOrderDetailStatus(`Removed ${successCount}/${details.length} item(s).${errMsg}`, 'error');
+        const errMsg = errors.length ? ` ${errors.join('; ')}` : '';
+        const msg = `oLPN ${removeValue} removed from bundle ${bundleValue} (${successCount}/${details.length} item(s)).${errMsg}`;
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
       } else {
-        status(errors.length ? errors[0] : `Failed to remove "${removeValue}" from bundle.`, 'error');
-        setOrderDetailStatus(errors.length ? errors[0] : 'Remove failed.', 'error');
+        const msg = errors.length ? errors[0] : `Failed to remove oLPN ${removeValue} from bundle ${bundleValue}.`;
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
       }
     };
 
