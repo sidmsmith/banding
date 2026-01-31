@@ -100,6 +100,38 @@
       color: var(--primary);
       font-size: 0.95em;
     }
+    /* Larger tooltip for bundle oLPN list; entire icon + oLPN (x) triggers it */
+    .olpn-bundle-cell {
+      position: relative;
+      cursor: default;
+    }
+    .olpn-bundle-cell::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 0;
+      top: 100%;
+      z-index: 1000;
+      margin-top: 2px;
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      line-height: 1.4;
+      max-width: 420px;
+      white-space: normal;
+      word-break: break-word;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.15s, visibility 0.15s;
+      pointer-events: none;
+    }
+    .olpn-bundle-cell:hover::after {
+      opacity: 1;
+      visibility: visible;
+    }
 
     /* TABLE CONTAINER */
     .table-container {
@@ -1047,7 +1079,7 @@
       sorted.forEach(olpn => {
         const location = olpn.CurrentLocationId || olpn.currentLocationId || olpn.CurrentLocation || '—';
         const olpnId = olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '—';
-        const quantity = olpn.TotalQty ?? olpn.totalQty ?? olpn.TotalLpnQty ?? '—';
+        const quantity = olpn.TotalLpnQty ?? olpn.totalLpnQty ?? olpn.TotalQty ?? olpn.totalQty ?? '—';
         const weight = olpn.Weight != null && olpn.Weight !== '' ? olpn.Weight : (olpn.EstimatedWeight != null && olpn.EstimatedWeight !== '' ? olpn.EstimatedWeight : '—');
         const raw = olpn.Extended?.CombinedOlpns ?? olpn.extended?.CombinedOlpns ?? '';
         let bundleCount = 0;
@@ -1068,8 +1100,9 @@
         }
         const isBundle = bundleCount > 0;
         const tooltipText = bundleOlpnIdsList || `Bundle (${bundleCount} oLPNs)`;
+        const tooltipEscaped = tooltipText.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const olpnCellContent = isBundle
-          ? `<span class="olpn-bundle-icon" title="${tooltipText.replace(/"/g, '&quot;')}"><i class="fas fa-boxes-stacked"></i></span> ${olpnId} (${bundleCount})`
+          ? `<span class="olpn-bundle-cell" data-tooltip="${tooltipEscaped}"><span class="olpn-bundle-icon"><i class="fas fa-boxes-stacked"></i></span> ${olpnId} (${bundleCount})</span>`
           : olpnId;
         const row = document.createElement('tr');
         row.innerHTML = `<td>${location}</td><td>${olpnCellContent}</td><td>${quantity}</td><td>${weight}</td>`;
