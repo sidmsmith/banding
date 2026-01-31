@@ -353,20 +353,27 @@
           <label class="form-label">Order:</label>
           <input type="text" id="orderDetailOrderId" class="form-control order-detail-readonly" readonly placeholder="Order ID" maxlength="20" />
         </div>
-        <div class="mb-3 d-flex flex-wrap align-items-end gap-2">
-          <div>
+        <div class="mb-3 d-flex flex-wrap align-items-end gap-3">
+          <div class="me-3">
             <label class="form-label">Bundle oLPN:</label>
             <input type="text" id="scanOlpnInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
           </div>
-          <div class="mb-0">
+          <div class="mb-0 me-4">
             <button id="validateOlpnBtn" class="btn btn-primary" type="button">Validate</button>
           </div>
-          <div>
+          <div class="me-3">
             <label class="form-label">Add oLPN to Bundle:</label>
             <input type="text" id="addOlpnToBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
           </div>
-          <div class="mb-0">
+          <div class="mb-0 me-4">
             <button id="updateBundleBtn" class="btn btn-primary" type="button">Update</button>
+          </div>
+          <div class="me-3">
+            <label class="form-label">Remove oLPN from Bundle:</label>
+            <input type="text" id="removeOlpnFromBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
+          </div>
+          <div class="mb-0">
+            <button id="removeFromBundleBtn" class="btn btn-primary" type="button">Update</button>
           </div>
         </div>
         <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
@@ -455,6 +462,8 @@
     const validateOlpnBtn = document.getElementById('validateOlpnBtn');
     const addOlpnToBundleInput = document.getElementById('addOlpnToBundleInput');
     const updateBundleBtn = document.getElementById('updateBundleBtn');
+    const removeOlpnFromBundleInput = document.getElementById('removeOlpnFromBundleInput');
+    const removeFromBundleBtn = document.getElementById('removeFromBundleBtn');
     const orderDetailStatusText = document.getElementById('orderDetailStatusText');
     const orderDetailStatusBox = document.getElementById('orderDetailStatus');
 
@@ -1045,17 +1054,25 @@
         const weight = olpn.Weight != null && olpn.Weight !== '' ? olpn.Weight : (olpn.EstimatedWeight != null && olpn.EstimatedWeight !== '' ? olpn.EstimatedWeight : '—');
         const raw = olpn.Extended?.CombinedOlpns ?? olpn.extended?.CombinedOlpns ?? '';
         let bundleCount = 0;
+        let bundleOlpnIdsList = '';
         if (raw && typeof raw === 'string' && raw.trim()) {
           try {
             const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) bundleCount = arr.length + 1;
+            if (Array.isArray(arr)) {
+              bundleCount = arr.length + 1;
+              const ids = [olpnId, ...arr.map(entry => (entry.OlpnId ?? entry.olpnId ?? '').toString()).filter(Boolean)];
+              bundleOlpnIdsList = ids.join(', ');
+            }
           } catch (e) {}
         } else if (Array.isArray(raw) && raw.length > 0) {
           bundleCount = raw.length + 1;
+          const ids = [olpnId, ...raw.map(entry => (entry.OlpnId ?? entry.olpnId ?? '').toString()).filter(Boolean)];
+          bundleOlpnIdsList = ids.join(', ');
         }
         const isBundle = bundleCount > 0;
+        const tooltipText = bundleOlpnIdsList || `Bundle (${bundleCount} oLPNs)`;
         const olpnCellContent = isBundle
-          ? `<span class="olpn-bundle-icon" title="Bundle (${bundleCount} oLPNs)"><i class="fas fa-boxes-stacked"></i></span> ${olpnId} (${bundleCount})`
+          ? `<span class="olpn-bundle-icon" title="${tooltipText.replace(/"/g, '&quot;')}"><i class="fas fa-boxes-stacked"></i></span> ${olpnId} (${bundleCount})`
           : olpnId;
         const row = document.createElement('tr');
         row.innerHTML = `<td>${location}</td><td>${olpnCellContent}</td><td>${quantity}</td><td>${weight}</td>`;
@@ -1199,6 +1216,109 @@
       status(successMsg, 'success');
       setOrderDetailStatus(successMsg, 'success');
       addOlpnToBundleInput.value = '';
+    };
+
+    // Remove from Bundle: validate input exists in CombinedOlpns, then remove and save
+    removeFromBundleBtn.onclick = async () => {
+      const bundleValue = scanOlpnInput.value.trim();
+      const removeValue = removeOlpnFromBundleInput.value.trim();
+
+      if (!bundleValue) {
+        status('Bundle oLPN is required', 'error');
+        setOrderDetailStatus('Bundle oLPN is required', 'error');
+        return;
+      }
+      if (!removeValue) {
+        status('Remove oLPN from Bundle is required', 'error');
+        setOrderDetailStatus('Remove oLPN from Bundle is required', 'error');
+        return;
+      }
+
+      const norm = (s) => String(s || '').trim().toLowerCase();
+      const bundleNorm = norm(bundleValue);
+      const removeNorm = norm(removeValue);
+
+      const bundleRecord = currentOrderOlpns.find(olpn => {
+        const id = (olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '').toString().toLowerCase();
+        return id === bundleNorm;
+      });
+
+      if (!bundleRecord) {
+        const msg = `"${bundleValue}" was not found in the oLPN list. Enter a valid Bundle oLPN.`;
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
+        return;
+      }
+
+      const currentRaw = bundleRecord.Extended?.CombinedOlpns ?? bundleRecord.extended?.CombinedOlpns ?? '';
+      let combinedArray = [];
+      if (currentRaw && typeof currentRaw === 'string' && currentRaw.trim()) {
+        try {
+          const parsed = JSON.parse(currentRaw);
+          combinedArray = Array.isArray(parsed) ? [...parsed] : [];
+        } catch (e) {
+          combinedArray = [];
+        }
+      } else if (Array.isArray(currentRaw)) {
+        combinedArray = [...currentRaw];
+      }
+
+      const foundIndex = combinedArray.findIndex(entry => {
+        const id = (entry.OlpnId ?? entry.olpnId ?? '').toString().toLowerCase();
+        return id === removeNorm;
+      });
+
+      if (foundIndex === -1) {
+        const msg = `"${removeValue}" was not found in the bundle's CombinedOlpns. Enter an oLPN that is in the bundle.`;
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
+        return;
+      }
+
+      combinedArray.splice(foundIndex, 1);
+      const combinedOlpnsString = JSON.stringify(combinedArray);
+
+      const pkRaw = bundleRecord.PK ?? bundleRecord.Pk ?? bundleRecord.pk ?? bundleRecord.OlpnPk ?? bundleRecord.olpnPk ?? bundleRecord.PrimaryKey ?? bundleRecord.primaryKey;
+      const pk = pkRaw != null ? String(pkRaw) : '';
+      if (!pk) {
+        const msg = 'Bundle oLPN record is missing PK; cannot update.';
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
+        return;
+      }
+
+      status('Removing oLPN from bundle...');
+      setOrderDetailStatus('Removing oLPN from bundle...', 'info');
+      removeFromBundleBtn.disabled = true;
+
+      const res = await api('updateOlpnExtended', {
+        org,
+        token,
+        olpnId: bundleValue,
+        pk,
+        combinedOlpns: combinedOlpnsString
+      });
+
+      removeFromBundleBtn.disabled = false;
+
+      if (!res.success) {
+        const errMsg = res.error || 'Update failed';
+        status(errMsg, 'error');
+        setOrderDetailStatus(errMsg, 'error');
+        return;
+      }
+
+      if (bundleRecord) {
+        if (!bundleRecord.Extended) bundleRecord.Extended = {};
+        if (!bundleRecord.extended) bundleRecord.extended = {};
+        bundleRecord.Extended.CombinedOlpns = combinedOlpnsString;
+        bundleRecord.extended.CombinedOlpns = combinedOlpnsString;
+      }
+      const successMsg = `Removed oLPN "${removeValue}" from bundle (${combinedArray.length} oLPN(s) remaining in bundle).`;
+      status(successMsg, 'success');
+      setOrderDetailStatus(successMsg, 'success');
+      removeOlpnFromBundleInput.value = '';
+      renderOrderDetailTable(currentOrderOlpns);
     };
 
     // Back button – return to Order List screen
