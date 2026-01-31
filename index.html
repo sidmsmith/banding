@@ -72,6 +72,9 @@
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-success:hover { background: var(--success-hover); }
     .btn-danger:hover { background: var(--red-text); opacity: 0.9; color: #fff; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Order Detail: 50px spacing between the three input units */
+    .order-detail-unit-gap { margin-right: 50px; }
 
     /* STATUS BAR */
     .status-bar {
@@ -355,26 +358,26 @@
           <label class="form-label">Order:</label>
           <input type="text" id="orderDetailOrderId" class="form-control order-detail-readonly" readonly placeholder="Order ID" maxlength="20" />
         </div>
-        <div class="mb-3 d-flex flex-nowrap gap-4 order-detail-bundle-row">
-          <div class="d-flex flex-column gap-2 flex-shrink-0">
+        <div class="mb-3 d-flex flex-nowrap order-detail-bundle-row">
+          <div class="d-flex flex-column gap-2 flex-shrink-0 order-detail-unit-gap">
             <label class="form-label">Bundle oLPN:</label>
             <div class="d-flex align-items-center gap-2">
               <input type="text" id="scanOlpnInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-              <button id="validateOlpnBtn" class="btn btn-primary" type="button">Validate</button>
+              <button id="validateOlpnBtn" class="btn btn-primary" type="button" disabled>Validate</button>
             </div>
           </div>
-          <div class="d-flex flex-column gap-2 flex-shrink-0">
+          <div class="d-flex flex-column gap-2 flex-shrink-0 order-detail-unit-gap">
             <label class="form-label">Add oLPN to Bundle:</label>
             <div class="d-flex align-items-center gap-2">
               <input type="text" id="addOlpnToBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-              <button id="updateBundleBtn" class="btn btn-success" type="button">Update</button>
+              <button id="updateBundleBtn" class="btn btn-success" type="button" disabled>Add</button>
             </div>
           </div>
           <div class="d-flex flex-column gap-2 flex-shrink-0">
             <label class="form-label">Remove oLPN from Bundle:</label>
             <div class="d-flex align-items-center gap-2">
               <input type="text" id="removeOlpnFromBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-              <button id="removeFromBundleBtn" class="btn btn-danger" type="button">Update</button>
+              <button id="removeFromBundleBtn" class="btn btn-danger" type="button" disabled>Remove</button>
             </div>
           </div>
         </div>
@@ -1099,13 +1102,29 @@
       orderDetailOrderId.value = selectedOrder.OrderId || '';
       scanOlpnInput.value = '';
       addOlpnToBundleInput.value = '';
+      removeOlpnFromBundleInput.value = '';
       setOrderDetailStatus('');
       scanOlpnInput.focus();
       renderOrderDetailTable(olpns);
+      syncOrderDetailButtonState();
+    }
+
+    // Sync Order Detail button disabled state from inputs (real-time: disabled when no value)
+    function syncOrderDetailButtonState() {
+      const hasBundle = !!scanOlpnInput.value.trim();
+      validateOlpnBtn.disabled = !hasBundle;
+      updateBundleBtn.disabled = !hasBundle || !addOlpnToBundleInput.value.trim();
+      removeFromBundleBtn.disabled = !hasBundle || !removeOlpnFromBundleInput.value.trim();
     }
 
     // Select Order button – show Order Detail screen and load oLPNs
     selectOrderBtn.onclick = () => openOrderDetailScreen();
+
+    // Real-time enable/disable Order Detail buttons as user types
+    [scanOlpnInput, addOlpnToBundleInput, removeOlpnFromBundleInput].forEach(input => {
+      input.addEventListener('input', syncOrderDetailButtonState);
+      input.addEventListener('change', syncOrderDetailButtonState);
+    });
 
     // Validate: check Bundle oLPN value exists in the oLPN list on the page (no API)
     validateOlpnBtn.onclick = () => {
@@ -1231,6 +1250,7 @@
         return;
       }
       addOlpnToBundleInput.value = '';
+      syncOrderDetailButtonState();
       setOrderDetailStatus('Refreshing list...', 'info');
       const refresh = await refreshOrderDetailOlpns();
       if (refresh.success) {
@@ -1332,6 +1352,7 @@
         return;
       }
       removeOlpnFromBundleInput.value = '';
+      syncOrderDetailButtonState();
       setOrderDetailStatus('Refreshing list...', 'info');
       const refresh = await refreshOrderDetailOlpns();
       if (refresh.success) {
