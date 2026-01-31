@@ -73,8 +73,8 @@
     .btn-success:hover { background: var(--success-hover); }
     .btn-danger:hover { background: var(--red-text); opacity: 0.9; color: #fff; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    /* Order Detail: 50px spacing between the three input units */
-    .order-detail-unit-gap { margin-right: 50px; }
+    /* Order Detail: 200px spacing between the three input units */
+    .order-detail-unit-gap { margin-right: 200px; }
 
     /* STATUS BAR */
     .status-bar {
@@ -1109,12 +1109,39 @@
       syncOrderDetailButtonState();
     }
 
-    // Sync Order Detail button disabled state from inputs (real-time: disabled when no value)
+    // Sync Order Detail button disabled state: enable only when inputs pass current validations (no API)
     function syncOrderDetailButtonState() {
-      const hasBundle = !!scanOlpnInput.value.trim();
-      validateOlpnBtn.disabled = !hasBundle;
-      updateBundleBtn.disabled = !hasBundle || !addOlpnToBundleInput.value.trim();
-      removeFromBundleBtn.disabled = !hasBundle || !removeOlpnFromBundleInput.value.trim();
+      const norm = (s) => String(s || '').trim().toLowerCase();
+      const olpnIdInList = (value) => {
+        if (!value || !currentOrderOlpns.length) return false;
+        const v = norm(value);
+        return currentOrderOlpns.some(olpn => norm(olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '') === v);
+      };
+      const getBundleRecord = () => {
+        const bundleValue = scanOlpnInput.value.trim();
+        if (!bundleValue) return null;
+        const bundleNorm = norm(bundleValue);
+        return currentOrderOlpns.find(olpn => norm(olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '') === bundleNorm) || null;
+      };
+      const removeValueInBundle = (removeValue) => {
+        const bundleRecord = getBundleRecord();
+        if (!bundleRecord || !removeValue) return false;
+        const currentRaw = bundleRecord.Extended?.CombinedOlpns ?? bundleRecord.extended?.CombinedOlpns ?? '';
+        let combinedArray = [];
+        if (currentRaw && typeof currentRaw === 'string' && currentRaw.trim()) {
+          try {
+            const parsed = JSON.parse(currentRaw);
+            combinedArray = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {}
+        } else if (Array.isArray(currentRaw)) combinedArray = currentRaw;
+        const removeNorm = norm(removeValue);
+        return combinedArray.some(entry => norm(entry.OlpnId ?? entry.olpnId ?? '') === removeNorm);
+      };
+
+      const bundleValid = olpnIdInList(scanOlpnInput.value.trim());
+      validateOlpnBtn.disabled = !bundleValid;
+      updateBundleBtn.disabled = !bundleValid || !olpnIdInList(addOlpnToBundleInput.value.trim());
+      removeFromBundleBtn.disabled = !bundleValid || !removeValueInBundle(removeOlpnFromBundleInput.value.trim());
     }
 
     // Select Order button – show Order Detail screen and load oLPNs
