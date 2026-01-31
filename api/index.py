@@ -123,8 +123,23 @@ def search_olpns(order_ids, headers, org):
     
     # Format order IDs for query (comma-separated, single-quoted, in parentheses)
     order_ids_str = "', '".join(order_ids)
+    # Template tells the API which fields to return (include Pk for olpn/save updates)
     payload = {
         "Query": f"OrderId in ('{order_ids_str}')",
+        "Template": {
+            "OrderId": None,
+            "OlpnId": None,
+            "Pk": None,
+            "PK": None,
+            "Status": None,
+            "CurrentLocationId": None,
+            "Weight": None,
+            "EstimatedWeight": None,
+            "OlpnDetail": None,
+            "Extended": {
+                "CombinedOlpns": None
+            }
+        },
         "Size": 1000,
         "Page": 0
     }
