@@ -1167,6 +1167,13 @@
         setOrderDetailStatus(errMsg, 'error');
         return;
       }
+      // Update in-memory bundle record so next Update appends to this value (not overwrite)
+      if (bundleRecord) {
+        if (!bundleRecord.Extended) bundleRecord.Extended = {};
+        if (!bundleRecord.extended) bundleRecord.extended = {};
+        bundleRecord.Extended.CombinedOlpns = combinedOlpnsString;
+        bundleRecord.extended.CombinedOlpns = combinedOlpnsString;
+      }
       const successMsg = `Added oLPN "${addValue}" to bundle (${combinedArray.length} oLPN(s) in bundle).`;
       status(successMsg, 'success');
       setOrderDetailStatus(successMsg, 'success');
