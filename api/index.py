@@ -368,6 +368,46 @@ def get_olpns_endpoint():
         "olpns": olpns_filtered
     })
 
+def split_combine_olpn(headers, org, from_olpn_id, to_olpn_id):
+    """
+    Call Manhattan Split Combine API to combine FromOlpnId into ToOlpnId (bundle).
+    Must be called BEFORE updating Extended.CombinedOlpns; if this fails we do not update CombinedOlpns.
+    After a successful combine, the FromOlpnId oLPN will have changed (status, items, qty), so
+    CombinedOlpns payload must be built from pre-combine data (see frontend comments).
+    """
+    url = f"https://{API_HOST}/pickpack/api/pickpack/postpack/splitcombineolpn/olpn/splitCombine"
+    facility_id = f"{org.upper()}-DM1"
+    headers = headers.copy()
+    headers.update({
+        "Content-Type": "application/json",
+        "FacilityId": facility_id,
+        "selectedOrganization": org.upper(),
+        "selectedLocation": facility_id
+    })
+    payload = {
+        "TransactionType": "SplitCombineOlpn",
+        "FromOlpnId": from_olpn_id,
+        "ToOlpnId": to_olpn_id,
+        "SplitCombineOlpnCritieriaId": "Combine oLPN Criteria",
+        "TransactionId": "Combine Olpn"
+    }
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=60, verify=False)
+        print(f"[SPLIT_COMBINE_OLPN] Status: {r.status_code}, FromOlpnId={from_olpn_id}, ToOlpnId={to_olpn_id}")
+        if not r.ok:
+            print(f"[SPLIT_COMBINE_OLPN] Error: {r.text[:500]}")
+            return False, r.text
+        data = r.json() if r.text else {}
+        if data.get("success") is False:
+            return False, json.dumps(data)
+        return True, None
+    except Exception as e:
+        print(f"[SPLIT_COMBINE_OLPN] Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, str(e)
+
+
 def olpn_save(headers, org, payload):
     """Update oLPN via /pickpack/api/pickpack/olpn/save (e.g. Extended.CombinedOlpns)."""
     url = f"https://{API_HOST}/pickpack/api/pickpack/olpn/save"
@@ -392,6 +432,26 @@ def olpn_save(headers, org, payload):
         import traceback
         traceback.print_exc()
         return None, str(e)
+
+@app.route('/api/splitCombineOlpn', methods=['POST'])
+def api_split_combine_olpn():
+    """
+    Combine oLPN (FromOlpnId) into bundle (ToOlpnId) via Manhattan Split Combine API.
+    Call this BEFORE updateOlpnExtended when adding an oLPN to a bundle.
+    If this fails, do NOT update CombinedOlpns.
+    """
+    org = request.json.get('org', '').strip()
+    token = request.json.get('token', '').strip()
+    from_olpn_id = request.json.get('fromOlpnId', '').strip()
+    to_olpn_id = request.json.get('toOlpnId', '').strip()
+    if not org or not token or not from_olpn_id or not to_olpn_id:
+        return jsonify({"success": False, "error": "ORG, token, fromOlpnId, and toOlpnId required"})
+    headers = {"Authorization": f"Bearer {token}"}
+    ok, err = split_combine_olpn(headers, org, from_olpn_id, to_olpn_id)
+    if not ok:
+        return jsonify({"success": False, "error": err or "Split combine failed"})
+    return jsonify({"success": True})
+
 
 @app.route('/api/updateOlpnExtended', methods=['POST'])
 def update_olpn_extended():

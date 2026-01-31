@@ -1175,7 +1175,9 @@
       }
     };
 
-    // Update button: validate both Bundle oLPN and Add oLPN to Bundle exist, then update Bundle oLPN Extended.CombinedOlpns
+    // Add oLPN to Bundle: flow is (1) Combine API first, (2) only if success update CombinedOlpns.
+    // We build the CombinedOlpns payload BEFORE the Combine API because after the combine, the FromOlpnId
+    // oLPN will have changed (status, items, quantity). We must record the ORIGINAL add-record data.
     updateBundleBtn.onclick = async () => {
       const bundleValue = scanOlpnInput.value.trim();
       const addValue = addOlpnToBundleInput.value.trim();
@@ -1227,20 +1229,21 @@
         return;
       }
       
-      // Current CombinedOlpns on bundle: parse as JSON array (append new oLPN with OlpnId + Details per line)
+      // --- Build CombinedOlpns payload BEFORE calling Combine API ---
+      // After the Combine API succeeds, the FromOlpnId (add oLPN) will be different (status, items, qty).
+      // We need to store the ORIGINAL add-record data in CombinedOlpns, so we build it now from addRecord.
       const currentRaw = bundleRecord.Extended?.CombinedOlpns ?? bundleRecord.extended?.CombinedOlpns ?? '';
       let combinedArray = [];
       if (currentRaw && typeof currentRaw === 'string' && currentRaw.trim()) {
         try {
           const parsed = JSON.parse(currentRaw);
-          combinedArray = Array.isArray(parsed) ? parsed : [];
+          combinedArray = Array.isArray(parsed) ? [...parsed] : [];
         } catch (e) {
           combinedArray = [];
         }
       } else if (Array.isArray(currentRaw)) {
-        combinedArray = currentRaw;
+        combinedArray = [...currentRaw];
       }
-
       const details = addRecord.OlpnDetail || addRecord.olpnDetail || addRecord.olpnDetails || [];
       const detailsForPayload = Array.isArray(details)
         ? details.map((d) => ({
@@ -1249,17 +1252,31 @@
           }))
         : [];
       const addOlpnId = addRecord.OlpnId ?? addRecord.olpnId ?? addRecord.oLPNId ?? addValue;
-      combinedArray.push({
-        OlpnId: addOlpnId,
-        Details: detailsForPayload
-      });
-
+      combinedArray.push({ OlpnId: addOlpnId, Details: detailsForPayload });
       const combinedOlpnsString = JSON.stringify(combinedArray);
 
-      status('Updating Bundle oLPN...');
-      setOrderDetailStatus('Updating Bundle oLPN...', 'info');
+      status('Combining oLPN...');
+      setOrderDetailStatus('Combining oLPN...', 'info');
       updateBundleBtn.disabled = true;
       
+      // Step 1: Call Combine oLPN API first. If it fails, we do NOT update CombinedOlpns.
+      // FromOlpnId = the oLPN being added (add), ToOlpnId = the bundle oLPN.
+      const combineRes = await api('splitCombineOlpn', {
+        org,
+        token,
+        fromOlpnId: addValue,
+        toOlpnId: bundleValue
+      });
+      
+      if (!combineRes.success) {
+        updateBundleBtn.disabled = false;
+        const errMsg = combineRes.error || 'Combine oLPN failed';
+        status(errMsg, 'error');
+        setOrderDetailStatus(errMsg, 'error');
+        return;
+      }
+      
+      // Step 2: Combine succeeded; update Extended.CombinedOlpns with the pre-built payload (original add-record data).
       const res = await api('updateOlpnExtended', {
         org,
         token,
@@ -1271,7 +1288,7 @@
       updateBundleBtn.disabled = false;
       
       if (!res.success) {
-        const errMsg = res.error || 'Update failed';
+        const errMsg = res.error || 'Update CombinedOlpns failed';
         status(errMsg, 'error');
         setOrderDetailStatus(errMsg, 'error');
         return;
