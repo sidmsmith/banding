@@ -1216,6 +1216,7 @@
       status(successMsg, 'success');
       setOrderDetailStatus(successMsg, 'success');
       addOlpnToBundleInput.value = '';
+      renderOrderDetailTable(currentOrderOlpns);
     };
 
     // Remove from Bundle: validate input exists in CombinedOlpns, then remove and save
