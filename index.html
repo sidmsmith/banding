@@ -1205,14 +1205,14 @@
         setOrderDetailStatus(errMsg, 'error');
         return;
       }
-      // Update in-memory bundle record so next Update appends to this value (not overwrite)
+      // Update in-memory bundle record so table re-render shows new count and tooltip (same object ref as in currentOrderOlpns)
       if (bundleRecord) {
-        if (!bundleRecord.Extended) bundleRecord.Extended = {};
-        if (!bundleRecord.extended) bundleRecord.extended = {};
-        bundleRecord.Extended.CombinedOlpns = combinedOlpnsString;
-        bundleRecord.extended.CombinedOlpns = combinedOlpnsString;
+        const ext = bundleRecord.Extended ?? bundleRecord.extended ?? {};
+        bundleRecord.Extended = { ...ext, CombinedOlpns: combinedOlpnsString };
+        bundleRecord.extended = { ...ext, CombinedOlpns: combinedOlpnsString };
       }
-      const successMsg = `Added oLPN "${addValue}" to bundle (${combinedArray.length} oLPN(s) in bundle).`;
+      const totalInBundle = combinedArray.length + 1; // bundle itself + combined oLPNs
+      const successMsg = `Added oLPN "${addValue}" to bundle (${totalInBundle} oLPN(s) in bundle).`;
       status(successMsg, 'success');
       setOrderDetailStatus(successMsg, 'success');
       addOlpnToBundleInput.value = '';
