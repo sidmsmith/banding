@@ -95,6 +95,16 @@ def search_orders(headers, org):
         print(f"[SEARCH_ORDERS] Traceback: {traceback.format_exc()}")
         return []
 
+def olpn_status_under_9000(olpn):
+    """Return True if oLPN Status is missing or < 9000 (include in count/display)."""
+    status = olpn.get("Status") if olpn.get("Status") is not None else olpn.get("status")
+    if status is None:
+        return True
+    try:
+        return int(status) < 9000
+    except (TypeError, ValueError):
+        return True
+
 def search_olpns(order_ids, headers, org):
     """Search for oLPNs for given order IDs"""
     if not order_ids:
@@ -251,9 +261,11 @@ def search_orders_endpoint():
     # Step 3: Process and aggregate data
     print(f"[SEARCH_ORDERS_ENDPOINT] Step 3: Processing and aggregating data...")
     
-    # Group oLPNs by OrderId
+    # Group oLPNs by OrderId (only include Status < 9000 for count/display)
     olpns_by_order = {}
     for olpn in olpns:
+        if not olpn_status_under_9000(olpn):
+            continue
         order_id = olpn.get("OrderId")
         if order_id:
             if order_id not in olpns_by_order:
@@ -332,10 +344,12 @@ def get_olpns_endpoint():
     
     headers = {"Authorization": f"Bearer {token}"}
     olpns = search_olpns([order_id], headers, org)
+    # Only return oLPNs with Status < 9000 for Order Detail display
+    olpns_filtered = [o for o in olpns if olpn_status_under_9000(o)]
     
     return jsonify({
         "success": True,
-        "olpns": olpns
+        "olpns": olpns_filtered
     })
 
 # === FALLBACK: Serve index.html for SPA (Critical for Vercel) ===
