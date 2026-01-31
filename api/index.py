@@ -352,6 +352,61 @@ def get_olpns_endpoint():
         "olpns": olpns_filtered
     })
 
+def olpn_save(headers, org, payload):
+    """Update oLPN via /pickpack/api/pickpack/olpn/save (e.g. Extended.CombinedOlpns)."""
+    url = f"https://{API_HOST}/pickpack/api/pickpack/olpn/save"
+    facility_id = f"{org.upper()}-DM1"
+    headers = headers.copy()
+    headers.update({
+        "Content-Type": "application/json",
+        "FacilityId": facility_id,
+        "selectedOrganization": org.upper(),
+        "selectedLocation": facility_id
+    })
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=60, verify=False)
+        print(f"[OLPN_SAVE] Status: {r.status_code}, Payload: {json.dumps(payload, indent=2)}")
+        if not r.ok:
+            print(f"[OLPN_SAVE] Error: {r.text[:500]}")
+            return None, r.text
+        data = r.json()
+        return data, None
+    except Exception as e:
+        print(f"[OLPN_SAVE] Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, str(e)
+
+@app.route('/api/updateOlpnExtended', methods=['POST'])
+def update_olpn_extended():
+    """Update oLPN extended field (e.g. CombinedOlpns) via pickpack olpn/save."""
+    org = request.json.get('org', '').strip()
+    token = request.json.get('token', '').strip()
+    olpn_id = request.json.get('olpnId', '').strip()
+    pk = request.json.get('pk', '').strip()
+    combined_olpns = request.json.get('combinedOlpns', '')
+    
+    if not org or not token or not olpn_id or not pk:
+        return jsonify({"success": False, "error": "ORG, token, olpnId, and pk required"})
+    
+    # Payload: OlpnId, Pk, Extended.CombinedOlpns (same pattern as proofofdelivery PODStatus)
+    payload = {
+        "OlpnId": olpn_id,
+        "Pk": pk,
+        "Extended": {
+            "CombinedOlpns": combined_olpns if combined_olpns is not None else ""
+        }
+    }
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    data, err = olpn_save(headers, org, payload)
+    
+    if err:
+        return jsonify({"success": False, "error": err})
+    if data and data.get("success") is False:
+        return jsonify({"success": False, "error": json.dumps(data)})
+    return jsonify({"success": True, "data": data})
+
 # === FALLBACK: Serve index.html for SPA (Critical for Vercel) ===
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

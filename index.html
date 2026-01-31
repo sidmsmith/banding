@@ -1046,14 +1046,67 @@
       }
     };
 
-    // Update button (Add oLPN to Bundle) – placeholder for future logic
-    updateBundleBtn.onclick = () => {
-      const value = addOlpnToBundleInput.value.trim();
-      if (!value) {
-        status('Enter an oLPN in Add oLPN to Bundle to update', 'error');
+    // Update button: validate both Bundle oLPN and Add oLPN to Bundle exist, then update Bundle oLPN Extended.CombinedOlpns
+    updateBundleBtn.onclick = async () => {
+      const bundleValue = scanOlpnInput.value.trim();
+      const addValue = addOlpnToBundleInput.value.trim();
+      
+      if (!bundleValue) {
+        status('Bundle oLPN is required', 'error');
         return;
       }
-      status(`Update for "${value}" – logic to be added`, 'info');
+      if (!addValue) {
+        status('Add oLPN to Bundle is required', 'error');
+        return;
+      }
+      
+      const norm = (s) => String(s || '').trim().toLowerCase();
+      const bundleNorm = norm(bundleValue);
+      const addNorm = norm(addValue);
+      
+      const bundleRecord = currentOrderOlpns.find(olpn => {
+        const id = (olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '').toString().toLowerCase();
+        return id === bundleNorm;
+      });
+      const addRecord = currentOrderOlpns.find(olpn => {
+        const id = (olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '').toString().toLowerCase();
+        return id === addNorm;
+      });
+      
+      if (!bundleRecord) {
+        status(`"${bundleValue}" was not found in the oLPN list. Enter a valid Bundle oLPN.`, 'error');
+        return;
+      }
+      if (!addRecord) {
+        status(`"${addValue}" was not found in the oLPN list. Enter a valid Add oLPN to Bundle.`, 'error');
+        return;
+      }
+      
+      const pk = bundleRecord.Pk || bundleRecord.pk || '';
+      if (!pk) {
+        status('Bundle oLPN record is missing Pk; cannot update.', 'error');
+        return;
+      }
+      
+      status('Updating Bundle oLPN...');
+      updateBundleBtn.disabled = true;
+      
+      const res = await api('updateOlpnExtended', {
+        org,
+        token,
+        olpnId: bundleValue,
+        pk,
+        combinedOlpns: addValue
+      });
+      
+      updateBundleBtn.disabled = false;
+      
+      if (!res.success) {
+        status(res.error || 'Update failed', 'error');
+        return;
+      }
+      status(`Bundle oLPN "${bundleValue}" updated with CombinedOlpns = "${addValue}"`, 'success');
+      addOlpnToBundleInput.value = '';
     };
 
     // Back button – return to Order List screen
