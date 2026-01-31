@@ -250,11 +250,19 @@
     }
 
     .order-detail-readonly {
-      width: 20ch !important;
-      max-width: 20ch;
+      width: 24ch !important;
+      max-width: 24ch;
+      min-width: 24ch;
+      box-sizing: border-box;
       background-color: var(--input-bg) !important;
       color: var(--text-muted) !important;
       cursor: not-allowed !important;
+    }
+    .order-detail-20ch {
+      width: 24ch !important;
+      max-width: 24ch;
+      min-width: 24ch;
+      box-sizing: border-box;
     }
   </style>
 </head>
@@ -334,11 +342,23 @@
       <div id="orderDetailScreen" style="display: none;">
         <div class="mb-3">
           <label class="form-label">Order:</label>
-          <input type="text" id="orderDetailOrderId" class="form-control order-detail-readonly" readonly placeholder="Order ID" maxlength="20" style="width: 20ch; background-color: var(--input-bg); color: var(--text-muted); cursor: not-allowed;" />
+          <input type="text" id="orderDetailOrderId" class="form-control order-detail-readonly" readonly placeholder="Order ID" maxlength="20" />
         </div>
-        <div class="mb-3">
-          <label class="form-label">Bundle oLPN:</label>
-          <input type="text" id="scanOlpnInput" class="form-control" placeholder="Enter oLPN" maxlength="20" style="width: 20ch;" />
+        <div class="mb-3 d-flex flex-wrap align-items-end gap-2">
+          <div>
+            <label class="form-label">Bundle oLPN:</label>
+            <input type="text" id="scanOlpnInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
+          </div>
+          <div class="mb-0">
+            <button id="validateOlpnBtn" class="btn btn-primary" type="button">Validate</button>
+          </div>
+          <div>
+            <label class="form-label">Add oLPN to Bundle:</label>
+            <input type="text" id="addOlpnToBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
+          </div>
+          <div class="mb-0">
+            <button id="updateBundleBtn" class="btn btn-primary" type="button">Update</button>
+          </div>
         </div>
         <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
           <div>oLPNs in Bundle: XXX</div>
@@ -418,12 +438,16 @@
     const scanOlpnInput = document.getElementById('scanOlpnInput');
     const orderDetailTableBody = document.getElementById('orderDetailTableBody');
     const orderDetailBackBtn = document.getElementById('orderDetailBackBtn');
+    const validateOlpnBtn = document.getElementById('validateOlpnBtn');
+    const addOlpnToBundleInput = document.getElementById('addOlpnToBundleInput');
+    const updateBundleBtn = document.getElementById('updateBundleBtn');
 
     let token = null;
     let org = null;
     let selectedOrder = null;
     let ordersData = [];
     let currentSort = { column: 'OrderId', direction: 'asc' }; // Default sort
+    let currentOrderOlpns = []; // oLPNs for the current Order Detail screen (for Validate)
 
     // Console logging function
     function logToConsole(message, type = 'info') {
@@ -967,6 +991,7 @@
       }
       
       const olpns = res.olpns || [];
+      currentOrderOlpns = olpns;
       logToConsole(`Loaded ${olpns.length} oLPNs for order ${selectedOrder.OrderId}`, 'info');
       
       // Show Order Detail screen, hide Order List screen
@@ -975,6 +1000,7 @@
       
       orderDetailOrderId.value = selectedOrder.OrderId || '';
       scanOlpnInput.value = '';
+      addOlpnToBundleInput.value = '';
       scanOlpnInput.focus();
       
       // Sort by OlpnId and render rows: Location, oLPN, Quantity (sum PackedQuantity from OlpnDetail), Weight
@@ -999,6 +1025,35 @@
       });
       
       status(`Order ${selectedOrder.OrderId} – ${olpns.length} oLPN(s)`);
+    };
+
+    // Validate: check Bundle oLPN value exists in the oLPN list on the page (no API)
+    validateOlpnBtn.onclick = () => {
+      const value = scanOlpnInput.value.trim();
+      if (!value) {
+        status('Enter an oLPN in Bundle oLPN to validate', 'error');
+        return;
+      }
+      const normalized = value.toLowerCase();
+      const found = currentOrderOlpns.some(olpn => {
+        const id = (olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '').toString().toLowerCase();
+        return id === normalized;
+      });
+      if (found) {
+        status(`oLPN "${value}" is valid and exists in the list`, 'success');
+      } else {
+        status(`oLPN "${value}" was not found in the oLPN list`, 'error');
+      }
+    };
+
+    // Update button (Add oLPN to Bundle) – placeholder for future logic
+    updateBundleBtn.onclick = () => {
+      const value = addOlpnToBundleInput.value.trim();
+      if (!value) {
+        status('Enter an oLPN in Add oLPN to Bundle to update', 'error');
+        return;
+      }
+      status(`Update for "${value}" – logic to be added`, 'info');
     };
 
     // Back button – return to Order List screen
