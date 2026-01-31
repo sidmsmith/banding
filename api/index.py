@@ -136,6 +136,7 @@ def search_olpns(order_ids, headers, org):
             "Weight": None,
             "EstimatedWeight": None,
             "TotalQty": None,
+            "TotalLpnQty": None,
             "OlpnDetail": None,
             "Extended": {
                 "CombinedOlpns": None
