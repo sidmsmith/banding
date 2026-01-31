@@ -2,6 +2,26 @@
 
 All notable changes to the Banding application will be documented in this file.
 
+**Note:** Release 1.0.2 is the state just before adding "Split Combine API Calls".
+
+## [1.0.2] - 2026-01-27
+
+### Added
+- **Order Detail screen**: Select an order to view oLPNs; Bundle oLPN input with Validate; Add oLPN to Bundle and Remove oLPN from Bundle inputs with Add/Remove buttons
+- **Bundle oLPN management**: Add oLPN to bundle (updates `Extended.CombinedOlpns` via API); Remove oLPN from bundle (validation against CombinedOlpns, then API save)
+- **Bundle display**: oLPNs with non-empty CombinedOlpns show stacked-boxes icon, count, and tooltip listing all oLPN IDs in the bundle (comma-separated)
+- **Refresh after add/remove**: oLPN list refetched via getOlpns API after add or remove (no in-memory bundle state)
+- **URL parameters**: `Order` or `OrderId` — if the order exists in the list, auto-select it and open Order Detail
+
+### Changed
+- **Empty CombinedOlpns**: `CombinedOlpns: "[]"` is no longer treated as a bundle (no icon or count)
+- **Layout**: Labels above each textbox; three units (Bundle, Add, Remove) in one horizontal row with 200px spacing between units
+- **Buttons**: Add button green (btn-success), Remove button red (btn-danger); Validate/Add/Remove disabled when no valid input; enabled only when inputs pass current validations (valid LPN in list or in bundle’s CombinedOlpns — no API, real-time)
+- **Button labels**: Add oLPN action button labeled "Add"; Remove oLPN action button labeled "Remove"
+
+### Fixed
+- Success messages and table refresh correctly reflect add/remove (tooltip and count from refetched data)
+
 ## [1.0.1] - 2026-01-27
 
 ### Fixed
