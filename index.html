@@ -1023,7 +1023,7 @@
       setOrderDetailStatus('');
       scanOlpnInput.focus();
       
-      // Sort by OlpnId and render rows: Location, oLPN, Quantity (sum PackedQuantity from OlpnDetail), Weight
+      // Sort by OlpnId and render rows: Location, oLPN, Quantity (TotalQty), Weight
       const sorted = [...olpns].sort((a, b) => {
         const idA = (a.OlpnId || a.olpnId || '').toString().toLowerCase();
         const idB = (b.OlpnId || b.olpnId || '').toString().toLowerCase();
@@ -1034,10 +1034,7 @@
       sorted.forEach(olpn => {
         const location = olpn.CurrentLocationId || olpn.currentLocationId || olpn.CurrentLocation || '—';
         const olpnId = olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '—';
-        const details = olpn.OlpnDetail || olpn.olpnDetail || olpn.olpnDetails || [];
-        const quantity = Array.isArray(details)
-          ? details.reduce((sum, d) => sum + (Number(d.PackedQuantity) || Number(d.packedQuantity) || 0), 0)
-          : 0;
+        const quantity = olpn.TotalQty ?? olpn.totalQty ?? olpn.TotalLpnQty ?? '—';
         const weight = olpn.Weight != null && olpn.Weight !== '' ? olpn.Weight : (olpn.EstimatedWeight != null && olpn.EstimatedWeight !== '' ? olpn.EstimatedWeight : '—');
         const row = document.createElement('tr');
         row.innerHTML = `<td>${location}</td><td>${olpnId}</td><td>${quantity}</td><td>${weight}</td>`;
@@ -1121,6 +1118,35 @@
         return;
       }
       
+      // Current CombinedOlpns on bundle: parse as JSON array (append new oLPN with OlpnId + Details per line)
+      const currentRaw = bundleRecord.Extended?.CombinedOlpns ?? bundleRecord.extended?.CombinedOlpns ?? '';
+      let combinedArray = [];
+      if (currentRaw && typeof currentRaw === 'string' && currentRaw.trim()) {
+        try {
+          const parsed = JSON.parse(currentRaw);
+          combinedArray = Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          combinedArray = [];
+        }
+      } else if (Array.isArray(currentRaw)) {
+        combinedArray = currentRaw;
+      }
+
+      const details = addRecord.OlpnDetail || addRecord.olpnDetail || addRecord.olpnDetails || [];
+      const detailsForPayload = Array.isArray(details)
+        ? details.map((d) => ({
+            ItemId: d.ItemId ?? d.itemId ?? '',
+            PackedQuantity: d.PackedQuantity ?? d.packedQuantity ?? 0
+          }))
+        : [];
+      const addOlpnId = addRecord.OlpnId ?? addRecord.olpnId ?? addRecord.oLPNId ?? addValue;
+      combinedArray.push({
+        OlpnId: addOlpnId,
+        Details: detailsForPayload
+      });
+
+      const combinedOlpnsString = JSON.stringify(combinedArray);
+
       status('Updating Bundle oLPN...');
       setOrderDetailStatus('Updating Bundle oLPN...', 'info');
       updateBundleBtn.disabled = true;
@@ -1130,7 +1156,7 @@
         token,
         olpnId: bundleValue,
         pk,
-        combinedOlpns: addValue
+        combinedOlpns: combinedOlpnsString
       });
       
       updateBundleBtn.disabled = false;
@@ -1141,7 +1167,7 @@
         setOrderDetailStatus(errMsg, 'error');
         return;
       }
-      const successMsg = `Bundle oLPN "${bundleValue}" updated with CombinedOlpns = "${addValue}"`;
+      const successMsg = `Added oLPN "${addValue}" to bundle (${combinedArray.length} oLPN(s) in bundle).`;
       status(successMsg, 'success');
       setOrderDetailStatus(successMsg, 'success');
       addOlpnToBundleInput.value = '';
