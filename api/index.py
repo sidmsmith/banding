@@ -398,16 +398,17 @@ def update_olpn_extended():
     org = request.json.get('org', '').strip()
     token = request.json.get('token', '').strip()
     olpn_id = request.json.get('olpnId', '').strip()
-    pk = request.json.get('pk', '').strip()
+    pk_raw = request.json.get('pk') or request.json.get('PK')
+    pk = str(pk_raw).strip() if pk_raw is not None else ''
     combined_olpns = request.json.get('combinedOlpns', '')
     
     if not org or not token or not olpn_id or not pk:
         return jsonify({"success": False, "error": "ORG, token, olpnId, and pk required"})
     
-    # Payload: OlpnId, Pk, Extended.CombinedOlpns (same pattern as proofofdelivery PODStatus)
+    # Payload: OlpnId, PK (API returns PK at top level), Extended.CombinedOlpns
     payload = {
         "OlpnId": olpn_id,
-        "Pk": pk,
+        "PK": pk,
         "Extended": {
             "CombinedOlpns": combined_olpns if combined_olpns is not None else ""
         }

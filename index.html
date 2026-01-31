@@ -1111,9 +1111,11 @@
         return;
       }
       
-      const pk = bundleRecord.Pk || bundleRecord.pk || bundleRecord.PK || bundleRecord.OlpnPk || bundleRecord.olpnPk || bundleRecord.PrimaryKey || bundleRecord.primaryKey || '';
+      // API returns PK (uppercase) at top level of each oLPN; may be string or number
+      const pkRaw = bundleRecord.PK ?? bundleRecord.Pk ?? bundleRecord.pk ?? bundleRecord.OlpnPk ?? bundleRecord.olpnPk ?? bundleRecord.PrimaryKey ?? bundleRecord.primaryKey;
+      const pk = pkRaw != null ? String(pkRaw) : '';
       if (!pk) {
-        const msg = 'Bundle oLPN record is missing Pk; cannot update. (API may not return Pk—check Template in oLPN search.)';
+        const msg = 'Bundle oLPN record is missing PK; cannot update.';
         status(msg, 'error');
         setOrderDetailStatus(msg, 'error');
         return;
