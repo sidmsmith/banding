@@ -86,6 +86,8 @@
     }
     .status.success { color: var(--success); }
     .status.error { color: var(--red-text); }
+    .status.info { color: var(--primary); }
+    #orderDetailStatus { font-weight: 600; }
 
     /* TABLE CONTAINER */
     .table-container {
@@ -287,13 +289,13 @@
 
     <!-- MAIN UI (Hidden until auth) -->
     <div id="mainUI">
-      <!-- ORDER LIST SCREEN -->
-      <div id="orderListScreen">
-      <!-- STATUS BAR -->
+      <!-- STATUS BAR (visible on both Order List and Order Detail screens) -->
       <div class="status-bar">
         <div class="status" id="status">Authenticated – ready! Loading orders...</div>
       </div>
 
+      <!-- ORDER LIST SCREEN -->
+      <div id="orderListScreen">
       <!-- SCROLLABLE TABLE -->
       <div class="table-container">
         <table class="table table-dark table-hover" id="resultsTable">
@@ -380,7 +382,12 @@
             <tbody id="orderDetailTableBody"></tbody>
           </table>
         </div>
-        <div class="mt-3">
+        <div class="mt-3 mb-2">
+          <div id="orderDetailStatus" class="status-bar status-bar-inline py-2 px-3 rounded" style="min-height: 2.5rem; background: var(--card-bg); border: 1px solid var(--border); color: var(--text);">
+            <span id="orderDetailStatusText"></span>
+          </div>
+        </div>
+        <div class="mt-2">
           <button id="orderDetailBackBtn" class="btn btn-secondary" type="button">
             <i class="fas fa-arrow-left"></i> Back
           </button>
@@ -441,6 +448,8 @@
     const validateOlpnBtn = document.getElementById('validateOlpnBtn');
     const addOlpnToBundleInput = document.getElementById('addOlpnToBundleInput');
     const updateBundleBtn = document.getElementById('updateBundleBtn');
+    const orderDetailStatusText = document.getElementById('orderDetailStatusText');
+    const orderDetailStatusBox = document.getElementById('orderDetailStatus');
 
     let token = null;
     let org = null;
@@ -508,10 +517,20 @@
       }
     }
 
-    // Status helper
+    // Status helper (main status bar – visible on both screens now)
     function status(msg, type = '') {
       statusEl.textContent = msg;
       statusEl.className = 'status' + (type ? ` ${type}` : '');
+    }
+
+    // Order Detail screen status (message box above Back button)
+    function setOrderDetailStatus(msg, type = '') {
+      if (!orderDetailStatusText) return;
+      orderDetailStatusText.textContent = msg || '';
+      orderDetailStatusText.className = type ? `status ${type}` : 'status';
+      if (orderDetailStatusBox) {
+        orderDetailStatusBox.style.borderColor = type === 'error' ? 'var(--red-text)' : type === 'success' ? 'var(--success)' : 'var(--border)';
+      }
     }
 
     // THEME DEFINITIONS
@@ -1001,6 +1020,7 @@
       orderDetailOrderId.value = selectedOrder.OrderId || '';
       scanOlpnInput.value = '';
       addOlpnToBundleInput.value = '';
+      setOrderDetailStatus('');
       scanOlpnInput.focus();
       
       // Sort by OlpnId and render rows: Location, oLPN, Quantity (sum PackedQuantity from OlpnDetail), Weight
@@ -1032,6 +1052,7 @@
       const value = scanOlpnInput.value.trim();
       if (!value) {
         status('Enter an oLPN in Bundle oLPN to validate', 'error');
+        setOrderDetailStatus('Enter an oLPN in Bundle oLPN to validate', 'error');
         return;
       }
       const normalized = value.toLowerCase();
@@ -1041,8 +1062,10 @@
       });
       if (found) {
         status(`oLPN "${value}" is valid and exists in the list`, 'success');
+        setOrderDetailStatus(`oLPN "${value}" is valid and exists in the list`, 'success');
       } else {
         status(`oLPN "${value}" was not found in the oLPN list`, 'error');
+        setOrderDetailStatus(`oLPN "${value}" was not found in the oLPN list`, 'error');
       }
     };
 
@@ -1053,10 +1076,12 @@
       
       if (!bundleValue) {
         status('Bundle oLPN is required', 'error');
+        setOrderDetailStatus('Bundle oLPN is required', 'error');
         return;
       }
       if (!addValue) {
         status('Add oLPN to Bundle is required', 'error');
+        setOrderDetailStatus('Add oLPN to Bundle is required', 'error');
         return;
       }
       
@@ -1074,21 +1099,28 @@
       });
       
       if (!bundleRecord) {
-        status(`"${bundleValue}" was not found in the oLPN list. Enter a valid Bundle oLPN.`, 'error');
+        const msg = `"${bundleValue}" was not found in the oLPN list. Enter a valid Bundle oLPN.`;
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
         return;
       }
       if (!addRecord) {
-        status(`"${addValue}" was not found in the oLPN list. Enter a valid Add oLPN to Bundle.`, 'error');
+        const msg = `"${addValue}" was not found in the oLPN list. Enter a valid Add oLPN to Bundle.`;
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
         return;
       }
       
       const pk = bundleRecord.Pk || bundleRecord.pk || '';
       if (!pk) {
-        status('Bundle oLPN record is missing Pk; cannot update.', 'error');
+        const msg = 'Bundle oLPN record is missing Pk; cannot update.';
+        status(msg, 'error');
+        setOrderDetailStatus(msg, 'error');
         return;
       }
       
       status('Updating Bundle oLPN...');
+      setOrderDetailStatus('Updating Bundle oLPN...', 'info');
       updateBundleBtn.disabled = true;
       
       const res = await api('updateOlpnExtended', {
@@ -1102,10 +1134,14 @@
       updateBundleBtn.disabled = false;
       
       if (!res.success) {
-        status(res.error || 'Update failed', 'error');
+        const errMsg = res.error || 'Update failed';
+        status(errMsg, 'error');
+        setOrderDetailStatus(errMsg, 'error');
         return;
       }
-      status(`Bundle oLPN "${bundleValue}" updated with CombinedOlpns = "${addValue}"`, 'success');
+      const successMsg = `Bundle oLPN "${bundleValue}" updated with CombinedOlpns = "${addValue}"`;
+      status(successMsg, 'success');
+      setOrderDetailStatus(successMsg, 'success');
       addOlpnToBundleInput.value = '';
     };
 
