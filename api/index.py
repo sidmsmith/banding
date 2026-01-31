@@ -408,6 +408,48 @@ def split_combine_olpn(headers, org, from_olpn_id, to_olpn_id):
         return False, str(e)
 
 
+def split_olpn(headers, org, from_olpn_id, to_olpn_id, item_id, quantity):
+    """
+    Call Manhattan Split Combine API to split one item from bundle (FromOlpnId) to oLPN (ToOlpnId).
+    Same URL as combine; payload uses Split oLPN Criteria, Split Olpn transaction, and ItemId/Quantity.
+    ItemId and Quantity must come from CombinedOlpns Details (not the live ToOlpnId record).
+    API allows only one item per request; call once per item for Remove.
+    """
+    url = f"https://{API_HOST}/pickpack/api/pickpack/postpack/splitcombineolpn/olpn/splitCombine"
+    facility_id = f"{org.upper()}-DM1"
+    headers = headers.copy()
+    headers.update({
+        "Content-Type": "application/json",
+        "FacilityId": facility_id,
+        "selectedOrganization": org.upper(),
+        "selectedLocation": facility_id
+    })
+    payload = {
+        "TransactionType": "SplitCombineOlpn",
+        "FromOlpnId": from_olpn_id,
+        "ToOlpnId": to_olpn_id,
+        "SplitCombineOlpnCritieriaId": "Split oLPN Criteria",
+        "TransactionId": "Split Olpn",
+        "ItemId": item_id,
+        "Quantity": int(quantity) if quantity is not None else 0
+    }
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=60, verify=False)
+        print(f"[SPLIT_OLPN] Status: {r.status_code}, From={from_olpn_id}, To={to_olpn_id}, ItemId={item_id}, Qty={quantity}")
+        if not r.ok:
+            print(f"[SPLIT_OLPN] Error: {r.text[:500]}")
+            return False, r.text
+        data = r.json() if r.text else {}
+        if data.get("success") is False:
+            return False, json.dumps(data)
+        return True, None
+    except Exception as e:
+        print(f"[SPLIT_OLPN] Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, str(e)
+
+
 def olpn_save(headers, org, payload):
     """Update oLPN via /pickpack/api/pickpack/olpn/save (e.g. Extended.CombinedOlpns)."""
     url = f"https://{API_HOST}/pickpack/api/pickpack/olpn/save"
@@ -450,6 +492,29 @@ def api_split_combine_olpn():
     ok, err = split_combine_olpn(headers, org, from_olpn_id, to_olpn_id)
     if not ok:
         return jsonify({"success": False, "error": err or "Split combine failed"})
+    return jsonify({"success": True})
+
+
+@app.route('/api/splitOlpn', methods=['POST'])
+def api_split_olpn():
+    """
+    Split one item from bundle (fromOlpnId) to oLPN (toOlpnId). ItemId and Quantity from CombinedOlpns Details.
+    Call once per item for Remove; update CombinedOlpns after each successful call.
+    """
+    org = request.json.get('org', '').strip()
+    token = request.json.get('token', '').strip()
+    from_olpn_id = request.json.get('fromOlpnId', '').strip()
+    to_olpn_id = request.json.get('toOlpnId', '').strip()
+    item_id = request.json.get('itemId', '')
+    quantity = request.json.get('quantity')
+    if not org or not token or not from_olpn_id or not to_olpn_id:
+        return jsonify({"success": False, "error": "ORG, token, fromOlpnId, and toOlpnId required"})
+    if item_id is None or item_id == '':
+        return jsonify({"success": False, "error": "itemId required"})
+    headers = {"Authorization": f"Bearer {token}"}
+    ok, err = split_olpn(headers, org, from_olpn_id, to_olpn_id, item_id, quantity)
+    if not ok:
+        return jsonify({"success": False, "error": err or "Split failed"})
     return jsonify({"success": True})
 
 

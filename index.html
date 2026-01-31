@@ -1338,7 +1338,8 @@
       }
     };
 
-    // Remove from Bundle: validate input exists in CombinedOlpns, then remove and save
+    // Remove from Bundle: call Split API once per item (ItemId/Quantity from CombinedOlpns Details).
+    // Update CombinedOlpns after each successful Split so the field stays accurate if some items fail.
     removeFromBundleBtn.onclick = async () => {
       const bundleValue = scanOlpnInput.value.trim();
       const removeValue = removeOlpnFromBundleInput.value.trim();
@@ -1375,68 +1376,97 @@
       if (currentRaw && typeof currentRaw === 'string' && currentRaw.trim()) {
         try {
           const parsed = JSON.parse(currentRaw);
-          combinedArray = Array.isArray(parsed) ? [...parsed] : [];
+          combinedArray = Array.isArray(parsed) ? parsed.map(e => ({ ...e, Details: [...(e.Details || e.details || [])] })) : [];
         } catch (e) {
           combinedArray = [];
         }
       } else if (Array.isArray(currentRaw)) {
-        combinedArray = [...currentRaw];
+        combinedArray = currentRaw.map(e => ({ ...e, Details: [...(e.Details || e.details || [])] }));
       }
 
-      const foundIndex = combinedArray.findIndex(entry => {
-        const id = (entry.OlpnId ?? entry.olpnId ?? '').toString().toLowerCase();
-        return id === removeNorm;
-      });
-
-      if (foundIndex === -1) {
+      const entryIndex = combinedArray.findIndex(entry => norm(entry.OlpnId ?? entry.olpnId ?? '') === removeNorm);
+      if (entryIndex === -1) {
         const msg = `"${removeValue}" was not found in the bundle's CombinedOlpns. Enter an oLPN that is in the bundle.`;
         status(msg, 'error');
         setOrderDetailStatus(msg, 'error');
         return;
       }
 
-      combinedArray.splice(foundIndex, 1);
-      const combinedOlpnsString = JSON.stringify(combinedArray);
+      const entry = combinedArray[entryIndex];
+      const details = entry.Details || entry.details || [];
+      if (details.length === 0) {
+        status(`No item details for "${removeValue}" in CombinedOlpns; cannot split.`, 'error');
+        setOrderDetailStatus(`No item details for "${removeValue}" in CombinedOlpns.`, 'error');
+        return;
+      }
 
       const pkRaw = bundleRecord.PK ?? bundleRecord.Pk ?? bundleRecord.pk ?? bundleRecord.OlpnPk ?? bundleRecord.olpnPk ?? bundleRecord.PrimaryKey ?? bundleRecord.primaryKey;
       const pk = pkRaw != null ? String(pkRaw) : '';
       if (!pk) {
-        const msg = 'Bundle oLPN record is missing PK; cannot update.';
-        status(msg, 'error');
-        setOrderDetailStatus(msg, 'error');
+        status('Bundle oLPN record is missing PK; cannot update.', 'error');
+        setOrderDetailStatus('Bundle oLPN record is missing PK.', 'error');
         return;
       }
 
-      status('Removing oLPN from bundle...');
-      setOrderDetailStatus('Removing oLPN from bundle...', 'info');
       removeFromBundleBtn.disabled = true;
+      const errors = [];
+      let successCount = 0;
 
-      const res = await api('updateOlpnExtended', {
-        org,
-        token,
-        olpnId: bundleValue,
-        pk,
-        combinedOlpns: combinedOlpnsString
-      });
+      for (let i = 0; i < details.length; i++) {
+        const d = details[i];
+        const itemId = (d.ItemId ?? d.itemId ?? '').toString();
+        const qty = d.PackedQuantity ?? d.packedQuantity ?? 0;
+        setOrderDetailStatus(`Splitting item ${i + 1}/${details.length} (${itemId})...`, 'info');
+
+        const splitRes = await api('splitOlpn', {
+          org,
+          token,
+          fromOlpnId: bundleValue,
+          toOlpnId: removeValue,
+          itemId,
+          quantity: qty
+        });
+
+        if (splitRes.success) {
+          successCount++;
+          const entryNow = combinedArray.find(e => norm(e.OlpnId ?? e.olpnId ?? '') === removeNorm);
+          if (entryNow && entryNow.Details) {
+            const di = entryNow.Details.findIndex(x => (x.ItemId ?? x.itemId ?? '').toString() === itemId && (x.PackedQuantity ?? x.packedQuantity ?? 0) === qty);
+            if (di !== -1) entryNow.Details.splice(di, 1);
+            if (entryNow.Details.length === 0) {
+              const idx = combinedArray.findIndex(e => norm(e.OlpnId ?? e.olpnId ?? '') === removeNorm);
+              if (idx !== -1) combinedArray.splice(idx, 1);
+            }
+          }
+          const combinedOlpnsString = JSON.stringify(combinedArray);
+          const updateRes = await api('updateOlpnExtended', { org, token, olpnId: bundleValue, pk, combinedOlpns: combinedOlpnsString });
+          if (updateRes.success) {
+            if (!bundleRecord.Extended) bundleRecord.Extended = {};
+            if (!bundleRecord.extended) bundleRecord.extended = {};
+            bundleRecord.Extended.CombinedOlpns = combinedOlpnsString;
+            bundleRecord.extended.CombinedOlpns = combinedOlpnsString;
+          }
+        } else {
+          errors.push(`Item ${itemId} qty ${qty}: ${splitRes.error || 'Split failed'}`);
+        }
+      }
 
       removeFromBundleBtn.disabled = false;
-
-      if (!res.success) {
-        const errMsg = res.error || 'Update failed';
-        status(errMsg, 'error');
-        setOrderDetailStatus(errMsg, 'error');
-        return;
-      }
       removeOlpnFromBundleInput.value = '';
       syncOrderDetailButtonState();
       setOrderDetailStatus('Refreshing list...', 'info');
       const refresh = await refreshOrderDetailOlpns();
-      if (refresh.success) {
-        status(`Removed oLPN "${removeValue}" from bundle.`, 'success');
-        setOrderDetailStatus(`Removed oLPN "${removeValue}" from bundle.`, 'success');
+
+      if (successCount === details.length) {
+        status(`Removed oLPN "${removeValue}" from bundle (${successCount} item(s)).`, 'success');
+        setOrderDetailStatus(`Removed oLPN "${removeValue}" from bundle (${successCount} item(s)).`, 'success');
+      } else if (successCount > 0) {
+        const errMsg = errors.length ? ` Partial: ${errors.join('; ')}` : '';
+        status(`Removed ${successCount}/${details.length} item(s) for "${removeValue}".${errMsg}`, 'error');
+        setOrderDetailStatus(`Removed ${successCount}/${details.length} item(s).${errMsg}`, 'error');
       } else {
-        status(`Removed from bundle but refresh failed: ${refresh.error}`, 'error');
-        setOrderDetailStatus(`Removed from bundle but refresh failed: ${refresh.error}`, 'error');
+        status(errors.length ? errors[0] : `Failed to remove "${removeValue}" from bundle.`, 'error');
+        setOrderDetailStatus(errors.length ? errors[0] : 'Remove failed.', 'error');
       }
     };
 
