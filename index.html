@@ -95,8 +95,6 @@
       color: var(--primary);
       font-size: 0.95em;
     }
-    /* Order Detail: 3x spacing between the three textbox groups (Bundle, Add, Remove) */
-    .order-detail-group-gap { margin-right: 4.5rem; }
 
     /* TABLE CONTAINER */
     .table-container {
@@ -355,26 +353,20 @@
           <label class="form-label">Order:</label>
           <input type="text" id="orderDetailOrderId" class="form-control order-detail-readonly" readonly placeholder="Order ID" maxlength="20" />
         </div>
-        <div class="mb-3 d-flex flex-wrap align-items-end gap-3 order-detail-bundle-row">
-          <div class="me-3 order-detail-group-gap">
-            <label class="form-label">Bundle oLPN:</label>
+        <div class="mb-3 d-flex flex-nowrap align-items-end gap-4 order-detail-bundle-row">
+          <div class="d-flex align-items-end gap-2 flex-shrink-0">
+            <label class="form-label mb-0">Bundle oLPN:</label>
             <input type="text" id="scanOlpnInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-          </div>
-          <div class="mb-0 me-3 order-detail-group-gap">
             <button id="validateOlpnBtn" class="btn btn-primary" type="button">Validate</button>
           </div>
-          <div class="me-3 order-detail-group-gap">
-            <label class="form-label">Add oLPN to Bundle:</label>
+          <div class="d-flex align-items-end gap-2 flex-shrink-0">
+            <label class="form-label mb-0">Add oLPN to Bundle:</label>
             <input type="text" id="addOlpnToBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-          </div>
-          <div class="mb-0 me-3 order-detail-group-gap">
             <button id="updateBundleBtn" class="btn btn-primary" type="button">Update</button>
           </div>
-          <div class="me-3">
-            <label class="form-label">Remove oLPN from Bundle:</label>
+          <div class="d-flex align-items-end gap-2 flex-shrink-0">
+            <label class="form-label mb-0">Remove oLPN from Bundle:</label>
             <input type="text" id="removeOlpnFromBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-          </div>
-          <div class="mb-0">
             <button id="removeFromBundleBtn" class="btn btn-primary" type="button">Update</button>
           </div>
         </div>
