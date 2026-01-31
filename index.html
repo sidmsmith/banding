@@ -89,6 +89,13 @@
     .status.info { color: var(--primary); }
     #orderDetailStatus { font-weight: 600; }
 
+    .olpn-bundle-icon {
+      display: inline-block;
+      margin-right: 0.35rem;
+      color: var(--primary);
+      font-size: 0.95em;
+    }
+
     /* TABLE CONTAINER */
     .table-container {
       flex: 1;
@@ -1036,8 +1043,22 @@
         const olpnId = olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '—';
         const quantity = olpn.TotalQty ?? olpn.totalQty ?? olpn.TotalLpnQty ?? '—';
         const weight = olpn.Weight != null && olpn.Weight !== '' ? olpn.Weight : (olpn.EstimatedWeight != null && olpn.EstimatedWeight !== '' ? olpn.EstimatedWeight : '—');
+        const raw = olpn.Extended?.CombinedOlpns ?? olpn.extended?.CombinedOlpns ?? '';
+        let bundleCount = 0;
+        if (raw && typeof raw === 'string' && raw.trim()) {
+          try {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) bundleCount = arr.length + 1;
+          } catch (e) {}
+        } else if (Array.isArray(raw) && raw.length > 0) {
+          bundleCount = raw.length + 1;
+        }
+        const isBundle = bundleCount > 0;
+        const olpnCellContent = isBundle
+          ? `<span class="olpn-bundle-icon" title="Bundle (${bundleCount} oLPNs)"><i class="fas fa-boxes-stacked"></i></span> ${olpnId} (${bundleCount})`
+          : olpnId;
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${location}</td><td>${olpnId}</td><td>${quantity}</td><td>${weight}</td>`;
+        row.innerHTML = `<td>${location}</td><td>${olpnCellContent}</td><td>${quantity}</td><td>${weight}</td>`;
         orderDetailTableBody.appendChild(row);
       });
       
