@@ -248,6 +248,14 @@
       color: var(--primary);
       margin-bottom: 0.5rem;
     }
+
+    .order-detail-readonly {
+      width: 20ch !important;
+      max-width: 20ch;
+      background-color: var(--input-bg) !important;
+      color: var(--text-muted) !important;
+      cursor: not-allowed !important;
+    }
   </style>
 </head>
 <body>
@@ -326,11 +334,11 @@
       <div id="orderDetailScreen" style="display: none;">
         <div class="mb-3">
           <label class="form-label">Order:</label>
-          <input type="text" id="orderDetailOrderId" class="form-control" readonly placeholder="Order ID" />
+          <input type="text" id="orderDetailOrderId" class="form-control order-detail-readonly" readonly placeholder="Order ID" maxlength="20" style="width: 20ch; background-color: var(--input-bg); color: var(--text-muted); cursor: not-allowed;" />
         </div>
         <div class="mb-3">
-          <label class="form-label">Scan oLPN to Add:</label>
-          <input type="text" id="scanOlpnInput" class="form-control" placeholder="Enter oLPN" />
+          <label class="form-label">Bundle oLPN:</label>
+          <input type="text" id="scanOlpnInput" class="form-control" placeholder="Enter oLPN" maxlength="20" style="width: 20ch;" />
         </div>
         <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
           <div>oLPNs in Bundle: XXX</div>
@@ -345,6 +353,7 @@
               <tr>
                 <th>Location</th>
                 <th>oLPN</th>
+                <th>Quantity</th>
                 <th>Weight</th>
               </tr>
             </thead>
@@ -968,7 +977,7 @@
       scanOlpnInput.value = '';
       scanOlpnInput.focus();
       
-      // Sort by OlpnId and render rows: Location (CurrentLocationId), oLPN (OlpnId), Weight (EstimatedWeight if Weight null)
+      // Sort by OlpnId and render rows: Location, oLPN, Quantity (sum PackedQuantity from OlpnDetail), Weight
       const sorted = [...olpns].sort((a, b) => {
         const idA = (a.OlpnId || a.olpnId || '').toString().toLowerCase();
         const idB = (b.OlpnId || b.olpnId || '').toString().toLowerCase();
@@ -979,9 +988,13 @@
       sorted.forEach(olpn => {
         const location = olpn.CurrentLocationId || olpn.currentLocationId || olpn.CurrentLocation || '—';
         const olpnId = olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '—';
+        const details = olpn.OlpnDetail || olpn.olpnDetail || olpn.olpnDetails || [];
+        const quantity = Array.isArray(details)
+          ? details.reduce((sum, d) => sum + (Number(d.PackedQuantity) || Number(d.packedQuantity) || 0), 0)
+          : 0;
         const weight = olpn.Weight != null && olpn.Weight !== '' ? olpn.Weight : (olpn.EstimatedWeight != null && olpn.EstimatedWeight !== '' ? olpn.EstimatedWeight : '—');
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${location}</td><td>${olpnId}</td><td>${weight}</td>`;
+        row.innerHTML = `<td>${location}</td><td>${olpnId}</td><td>${quantity}</td><td>${weight}</td>`;
         orderDetailTableBody.appendChild(row);
       });
       
