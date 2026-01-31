@@ -320,6 +320,24 @@ def search_orders_endpoint():
         "api_calls": api_calls_log
     })
 
+@app.route('/api/getOlpns', methods=['POST'])
+def get_olpns_endpoint():
+    """Fetch oLPNs for a single order (for Order Detail screen)"""
+    org = request.json.get('org', '').strip()
+    token = request.json.get('token', '').strip()
+    order_id = request.json.get('orderId', '').strip()
+    
+    if not org or not token or not order_id:
+        return jsonify({"success": False, "error": "ORG, token, and orderId required"})
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    olpns = search_olpns([order_id], headers, org)
+    
+    return jsonify({
+        "success": True,
+        "olpns": olpns
+    })
+
 # === FALLBACK: Serve index.html for SPA (Critical for Vercel) ===
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

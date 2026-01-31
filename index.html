@@ -271,6 +271,8 @@
 
     <!-- MAIN UI (Hidden until auth) -->
     <div id="mainUI">
+      <!-- ORDER LIST SCREEN -->
+      <div id="orderListScreen">
       <!-- STATUS BAR -->
       <div class="status-bar">
         <div class="status" id="status">Authenticated – ready! Loading orders...</div>
@@ -317,6 +319,45 @@
           <div class="console-output" id="console"></div>
         </div>
       </div>
+      </div>
+      <!-- END ORDER LIST SCREEN -->
+
+      <!-- ORDER DETAIL SCREEN (hidden until Select Order) -->
+      <div id="orderDetailScreen" style="display: none;">
+        <div class="mb-3">
+          <label class="form-label">Order:</label>
+          <input type="text" id="orderDetailOrderId" class="form-control" readonly placeholder="Order ID" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Scan oLPN to Add:</label>
+          <input type="text" id="scanOlpnInput" class="form-control" placeholder="Enter oLPN" />
+        </div>
+        <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+          <div>oLPNs in Bundle: XXX</div>
+          <div>Ship Via: XXX</div>
+          <div>Bundle Weight: XXX</div>
+          <div>Max. Weight: XXX</div>
+          <div>Order Weight: XXX</div>
+        </div>
+        <div class="table-container mb-3">
+          <table class="table table-dark table-hover" id="orderDetailTable">
+            <thead>
+              <tr>
+                <th>Location</th>
+                <th>oLPN</th>
+                <th>Weight</th>
+              </tr>
+            </thead>
+            <tbody id="orderDetailTableBody"></tbody>
+          </table>
+        </div>
+        <div class="mt-3">
+          <button id="orderDetailBackBtn" class="btn btn-secondary" type="button">
+            <i class="fas fa-arrow-left"></i> Back
+          </button>
+        </div>
+      </div>
+      <!-- END ORDER DETAIL SCREEN -->
     </div>
   </div>
 
@@ -362,6 +403,12 @@
     const themeModal = new bootstrap.Modal(document.getElementById('themeModal'));
     const themeList = document.getElementById('themeList');
     const themeLogo = document.getElementById('themeLogo');
+    const orderListScreen = document.getElementById('orderListScreen');
+    const orderDetailScreen = document.getElementById('orderDetailScreen');
+    const orderDetailOrderId = document.getElementById('orderDetailOrderId');
+    const scanOlpnInput = document.getElementById('scanOlpnInput');
+    const orderDetailTableBody = document.getElementById('orderDetailTableBody');
+    const orderDetailBackBtn = document.getElementById('orderDetailBackBtn');
 
     let token = null;
     let org = null;
@@ -580,11 +627,10 @@
 
       // Update table class for light themes
       const table = document.getElementById('resultsTable');
-      if (themeKey === 'dark') {
-        table.className = 'table table-dark table-hover';
-      } else {
-        table.className = 'table table-hover';
-      }
+      const orderDetailTable = document.getElementById('orderDetailTable');
+      const tableClass = themeKey === 'dark' ? 'table table-dark table-hover' : 'table table-hover';
+      if (table) table.className = tableClass;
+      if (orderDetailTable) orderDetailTable.className = tableClass;
 
       // Save to localStorage
       localStorage.setItem('selectedTheme', themeKey);
@@ -896,18 +942,57 @@
       logToConsole(`Selected order: ${order.OrderId}`, 'info');
     }
 
-    // Select Order button
-    selectOrderBtn.onclick = () => {
-      if (!selectedOrder) return;
+    // Select Order button – show Order Detail screen and load oLPNs
+    selectOrderBtn.onclick = async () => {
+      if (!selectedOrder || !token || !org) return;
       
       logToConsole(`\n=== Select Order Clicked ===`, 'info');
       logToConsole(`Selected Order: ${selectedOrder.OrderId}`, 'info');
       
-      // Navigate to order detail page (to be implemented)
-      alert(`Selected Order: ${selectedOrder.OrderId}\n\nOrder detail page to be implemented.`);
+      status('Loading oLPNs...');
+      const res = await api('getOlpns', { org, token, orderId: selectedOrder.OrderId });
       
-      // TODO: Navigate to order detail page
-      // window.location.href = `/order/${selectedOrder.OrderId}`;
+      if (!res.success) {
+        status('Failed to load oLPNs: ' + (res.error || 'Unknown error'), 'error');
+        return;
+      }
+      
+      const olpns = res.olpns || [];
+      logToConsole(`Loaded ${olpns.length} oLPNs for order ${selectedOrder.OrderId}`, 'info');
+      
+      // Show Order Detail screen, hide Order List screen
+      orderListScreen.style.display = 'none';
+      orderDetailScreen.style.display = 'block';
+      
+      orderDetailOrderId.value = selectedOrder.OrderId || '';
+      scanOlpnInput.value = '';
+      scanOlpnInput.focus();
+      
+      // Sort by OlpnId and render rows: Location (CurrentLocationId), oLPN (OlpnId), Weight (EstimatedWeight if Weight null)
+      const sorted = [...olpns].sort((a, b) => {
+        const idA = (a.OlpnId || a.olpnId || '').toString().toLowerCase();
+        const idB = (b.OlpnId || b.olpnId || '').toString().toLowerCase();
+        return idA.localeCompare(idB);
+      });
+      
+      orderDetailTableBody.innerHTML = '';
+      sorted.forEach(olpn => {
+        const location = olpn.CurrentLocationId || olpn.currentLocationId || olpn.CurrentLocation || '—';
+        const olpnId = olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '—';
+        const weight = olpn.Weight != null && olpn.Weight !== '' ? olpn.Weight : (olpn.EstimatedWeight != null && olpn.EstimatedWeight !== '' ? olpn.EstimatedWeight : '—');
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${location}</td><td>${olpnId}</td><td>${weight}</td>`;
+        orderDetailTableBody.appendChild(row);
+      });
+      
+      status(`Order ${selectedOrder.OrderId} – ${olpns.length} oLPN(s)`);
+    };
+
+    // Back button – return to Order List screen
+    orderDetailBackBtn.onclick = () => {
+      orderDetailScreen.style.display = 'none';
+      orderListScreen.style.display = 'block';
+      status(`Found ${ordersData.length} orders`, 'success');
     };
 
     // Initialize table header click handlers
