@@ -1303,19 +1303,38 @@
       }
       addOlpnToBundleInput.value = '';
       syncOrderDetailButtonState();
-      // After combine, Manhattan updates FromOlpnId to status 9000 (Cancelled). The search API may
-      // still return it until that update is committed. Delay refresh so we don't show the added
-      // oLPN briefly before it disappears (which would happen on a manual refresh).
-      setOrderDetailStatus('Refreshing list in a moment (waiting for system to update)...', 'info');
-      await new Promise(r => setTimeout(r, 2000));
-      setOrderDetailStatus('Refreshing list...', 'info');
-      const refresh = await refreshOrderDetailOlpns();
+      // After combine, Manhattan updates FromOlpnId to status 9000 (Cancelled). Poll getOlpns until
+      // the added oLPN is no longer in the response (backend filters status >= 9000), then refresh.
+      const addedOlpnIdNorm = addValue.trim().toLowerCase();
+      const maxAttempts = 20;
+      const pollMs = 400;
+      let refresh = { success: false };
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        setOrderDetailStatus(`Refreshing list${attempt > 0 ? ` (checking for status 9000…)` : ''}...`, 'info');
+        const res = await api('getOlpns', { org, token, orderId: selectedOrder.OrderId });
+        if (!res.success) {
+          refresh = res;
+          break;
+        }
+        const olpns = res.olpns || [];
+        const stillInList = olpns.some(o => (o.OlpnId || o.olpnId || o.oLPNId || '').toString().trim().toLowerCase() === addedOlpnIdNorm);
+        if (!stillInList) {
+          currentOrderOlpns = olpns;
+          renderOrderDetailTable(currentOrderOlpns);
+          refresh = { success: true };
+          break;
+        }
+        if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, pollMs));
+      }
       if (refresh.success) {
         status(`Added oLPN "${addValue}" to bundle.`, 'success');
         setOrderDetailStatus(`Added oLPN "${addValue}" to bundle.`, 'success');
       } else {
-        status(`Added oLPN "${addValue}" to bundle. Refresh failed: ${refresh.error}`, 'error');
-        setOrderDetailStatus(`Added to bundle but refresh failed: ${refresh.error}`, 'error');
+        const err = refresh.error || 'Refresh failed or status 9000 not seen in time';
+        status(`Added oLPN "${addValue}" to bundle. ${err}`, 'error');
+        setOrderDetailStatus(`Added to bundle but ${err}`, 'error');
+        const fallback = await refreshOrderDetailOlpns();
+        if (fallback.success) setOrderDetailStatus(`Added oLPN "${addValue}" to bundle. List refreshed.`, 'info');
       }
     };
 
