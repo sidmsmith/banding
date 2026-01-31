@@ -68,8 +68,10 @@
 
     .btn-primary { background: var(--primary); border: none; }
     .btn-success { background: var(--success); border: none; }
+    .btn-danger { background: var(--red-text); border: none; color: #fff; }
     .btn-primary:hover { background: var(--primary-hover); }
     .btn-success:hover { background: var(--success-hover); }
+    .btn-danger:hover { background: var(--red-text); opacity: 0.9; color: #fff; }
 
     /* STATUS BAR */
     .status-bar {
@@ -353,21 +355,27 @@
           <label class="form-label">Order:</label>
           <input type="text" id="orderDetailOrderId" class="form-control order-detail-readonly" readonly placeholder="Order ID" maxlength="20" />
         </div>
-        <div class="mb-3 d-flex flex-nowrap align-items-end gap-4 order-detail-bundle-row">
-          <div class="d-flex align-items-end gap-2 flex-shrink-0">
-            <label class="form-label mb-0">Bundle oLPN:</label>
-            <input type="text" id="scanOlpnInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-            <button id="validateOlpnBtn" class="btn btn-primary" type="button">Validate</button>
+        <div class="mb-3 d-flex flex-nowrap gap-4 order-detail-bundle-row">
+          <div class="d-flex flex-column gap-2 flex-shrink-0">
+            <label class="form-label">Bundle oLPN:</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="text" id="scanOlpnInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
+              <button id="validateOlpnBtn" class="btn btn-primary" type="button">Validate</button>
+            </div>
           </div>
-          <div class="d-flex align-items-end gap-2 flex-shrink-0">
-            <label class="form-label mb-0">Add oLPN to Bundle:</label>
-            <input type="text" id="addOlpnToBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-            <button id="updateBundleBtn" class="btn btn-primary" type="button">Update</button>
+          <div class="d-flex flex-column gap-2 flex-shrink-0">
+            <label class="form-label">Add oLPN to Bundle:</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="text" id="addOlpnToBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
+              <button id="updateBundleBtn" class="btn btn-success" type="button">Update</button>
+            </div>
           </div>
-          <div class="d-flex align-items-end gap-2 flex-shrink-0">
-            <label class="form-label mb-0">Remove oLPN from Bundle:</label>
-            <input type="text" id="removeOlpnFromBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
-            <button id="removeFromBundleBtn" class="btn btn-primary" type="button">Update</button>
+          <div class="d-flex flex-column gap-2 flex-shrink-0">
+            <label class="form-label">Remove oLPN from Bundle:</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="text" id="removeOlpnFromBundleInput" class="form-control order-detail-20ch" placeholder="Enter oLPN" maxlength="20" />
+              <button id="removeFromBundleBtn" class="btn btn-danger" type="button">Update</button>
+            </div>
           </div>
         </div>
         <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
