@@ -4,6 +4,14 @@ All notable changes to the Banding application will be documented in this file.
 
 **Note:** Release 1.0.2 is the state just before adding "Split Combine API Calls".
 
+## [1.0.3] - 2026-01-26
+
+### Added
+- **DisplayLocation on both screens**: Location column now shows DisplayLocation instead of LocationId
+  - Backend calls `/dcinventory/api/dcinventory/location/search` once per request with `LocationId in ('Loc1','Loc2',...)` and Template `LocationId`, `DisplayLocation`
+  - Order list: results enriched with DisplayLocation for each order's location
+  - Order Detail: each oLPN enriched with `DisplayLocation`; UI prefers DisplayLocation when present
+
 ## [1.0.2] - 2026-01-27
 
 ### Added

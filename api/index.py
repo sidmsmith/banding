@@ -177,6 +177,60 @@ def search_olpns(order_ids, headers, org):
         print(f"[SEARCH_OLPNS] Traceback: {traceback.format_exc()}")
         return []
 
+def search_locations(headers, org, location_ids):
+    """
+    Call /dcinventory/api/dcinventory/location/search to get DisplayLocation for each LocationId.
+    location_ids: list of LocationId strings. Returns dict LocationId -> DisplayLocation (or LocationId if not found).
+    """
+    if not location_ids:
+        return {}
+    url = f"https://{API_HOST}/dcinventory/api/dcinventory/location/search"
+    facility_id = f"{org.upper()}-DM1"
+    headers = headers.copy()
+    headers.update({
+        "Content-Type": "application/json",
+        "FacilityId": facility_id,
+        "selectedOrganization": org.upper(),
+        "selectedLocation": facility_id
+    })
+    # Query: LocationId in ('Loc1','Loc2','Loc3')
+    escaped = [str(lid).replace("'", "''") for lid in location_ids if lid]
+    if not escaped:
+        return {}
+    in_clause = "', '".join(escaped)
+    payload = {
+        "Query": f"LocationId in ('{in_clause}')",
+        "Size": 1000,
+        "Template": {
+            "LocationId": None,
+            "DisplayLocation": None
+        }
+    }
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=60, verify=False)
+        if not r.ok:
+            print(f"[SEARCH_LOCATIONS] Error: {r.status_code} {r.text[:300]}")
+            return {}
+        data = r.json()
+        locs = data.get("data") or data.get("Data") or []
+        if not isinstance(locs, list):
+            return {}
+        display_map = {}
+        for item in locs:
+            if not isinstance(item, dict):
+                continue
+            loc_id = item.get("LocationId") or item.get("locationId") or item.get("LocationID")
+            display = item.get("DisplayLocation") or item.get("displayLocation")
+            if loc_id is not None and str(loc_id).strip():
+                display_map[str(loc_id).strip()] = (display if display is not None and str(display).strip() else str(loc_id).strip())
+        print(f"[SEARCH_LOCATIONS] Resolved {len(display_map)} display locations")
+        return display_map
+    except Exception as e:
+        print(f"[SEARCH_LOCATIONS] Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return {}
+
 def generate_random_divert_time():
     """Generate a random time within the last couple of hours"""
     now = datetime.now()
@@ -334,6 +388,14 @@ def search_orders_endpoint():
         print(f"[RESULT] Order: {order_id}, Location: {location}, OlpnCount: {len(unique_olpns)}, SVIA: {svia}, DivertDateTime: (will be set in frontend)")
         results.append(result_item)
     
+    # Resolve DisplayLocation for order list (single location search call for all unique location IDs)
+    location_ids = list({r.get("Location") for r in results if r.get("Location")})
+    display_map = search_locations(headers, org, location_ids) if location_ids else {}
+    for r in results:
+        loc_id = r.get("Location")
+        if loc_id:
+            r["Location"] = display_map.get(loc_id, loc_id)
+    
     print(f"[SEARCH_ORDERS_ENDPOINT] Returning {len(results)} results")
     
     # Add response info to API calls log
@@ -363,6 +425,19 @@ def get_olpns_endpoint():
     olpns = search_olpns([order_id], headers, org)
     # Only return oLPNs with Status < 9000 for Order Detail display
     olpns_filtered = [o for o in olpns if olpn_status_under_9000(o)]
+    
+    # Resolve DisplayLocation for Order Detail (single location search call)
+    location_ids = []
+    for o in olpns_filtered:
+        loc = o.get("CurrentLocationId") or o.get("currentLocationId") or o.get("CurrentLocation")
+        if loc and str(loc).strip():
+            location_ids.append(str(loc).strip())
+    location_ids = list(dict.fromkeys(location_ids))  # unique, preserve order
+    display_map = search_locations(headers, org, location_ids) if location_ids else {}
+    for o in olpns_filtered:
+        loc = o.get("CurrentLocationId") or o.get("currentLocationId") or o.get("CurrentLocation")
+        if loc:
+            o["DisplayLocation"] = display_map.get(str(loc).strip(), loc)
     
     return jsonify({
         "success": True,

@@ -1071,7 +1071,7 @@
       });
       orderDetailTableBody.innerHTML = '';
       sorted.forEach(olpn => {
-        const location = olpn.CurrentLocationId || olpn.currentLocationId || olpn.CurrentLocation || '—';
+        const location = olpn.DisplayLocation || olpn.displayLocation || olpn.CurrentLocationId || olpn.currentLocationId || olpn.CurrentLocation || '—';
         const olpnId = olpn.OlpnId || olpn.olpnId || olpn.oLPNId || '—';
         const quantity = olpn.TotalLpnQty ?? olpn.totalLpnQty ?? olpn.TotalQty ?? olpn.totalQty ?? '—';
         const weight = olpn.Weight != null && olpn.Weight !== '' ? olpn.Weight : (olpn.EstimatedWeight != null && olpn.EstimatedWeight !== '' ? olpn.EstimatedWeight : '—');
