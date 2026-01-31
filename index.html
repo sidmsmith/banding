@@ -1031,8 +1031,16 @@
     }
 
     // Render Order Detail table from oLPN list (sort by OlpnId, show bundle icon/tooltip)
+    // Exclude oLPNs with status >= 9000 (e.g. Cancelled after combine) so they are never displayed.
     function renderOrderDetailTable(olpns) {
-      const sorted = [...(olpns || [])].sort((a, b) => {
+      const statusUnder9000 = (o) => {
+        const s = o.Status ?? o.status;
+        if (s == null) return true;
+        const n = parseInt(s, 10);
+        return !Number.isNaN(n) && n < 9000;
+      };
+      const list = (olpns || []).filter(statusUnder9000);
+      const sorted = [...list].sort((a, b) => {
         const idA = (a.OlpnId || a.olpnId || '').toString().toLowerCase();
         const idB = (b.OlpnId || b.olpnId || '').toString().toLowerCase();
         return idA.localeCompare(idB);
@@ -1069,7 +1077,7 @@
         row.innerHTML = `<td>${location}</td><td>${olpnCellContent}</td><td>${quantity}</td><td>${weight}</td>`;
         orderDetailTableBody.appendChild(row);
       });
-      if (selectedOrder) status(`Order ${selectedOrder.OrderId} – ${(olpns || []).length} oLPN(s)`);
+      if (selectedOrder) status(`Order ${selectedOrder.OrderId} – ${list.length} oLPN(s)`);
     }
 
     // Refetch oLPNs for current order from API and refresh the Order Detail table (no in-memory state)
@@ -1295,6 +1303,11 @@
       }
       addOlpnToBundleInput.value = '';
       syncOrderDetailButtonState();
+      // After combine, Manhattan updates FromOlpnId to status 9000 (Cancelled). The search API may
+      // still return it until that update is committed. Delay refresh so we don't show the added
+      // oLPN briefly before it disappears (which would happen on a manual refresh).
+      setOrderDetailStatus('Refreshing list in a moment (waiting for system to update)...', 'info');
+      await new Promise(r => setTimeout(r, 2000));
       setOrderDetailStatus('Refreshing list...', 'info');
       const refresh = await refreshOrderDetailOlpns();
       if (refresh.success) {
