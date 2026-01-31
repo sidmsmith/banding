@@ -1010,42 +1010,13 @@
       logToConsole(`Selected order: ${order.OrderId}`, 'info');
     }
 
-    // Select Order button – show Order Detail screen and load oLPNs
-    selectOrderBtn.onclick = async () => {
-      if (!selectedOrder || !token || !org) return;
-      
-      logToConsole(`\n=== Select Order Clicked ===`, 'info');
-      logToConsole(`Selected Order: ${selectedOrder.OrderId}`, 'info');
-      
-      status('Loading oLPNs...');
-      const res = await api('getOlpns', { org, token, orderId: selectedOrder.OrderId });
-      
-      if (!res.success) {
-        status('Failed to load oLPNs: ' + (res.error || 'Unknown error'), 'error');
-        return;
-      }
-      
-      const olpns = res.olpns || [];
-      currentOrderOlpns = olpns;
-      logToConsole(`Loaded ${olpns.length} oLPNs for order ${selectedOrder.OrderId}`, 'info');
-      
-      // Show Order Detail screen, hide Order List screen
-      orderListScreen.style.display = 'none';
-      orderDetailScreen.style.display = 'block';
-      
-      orderDetailOrderId.value = selectedOrder.OrderId || '';
-      scanOlpnInput.value = '';
-      addOlpnToBundleInput.value = '';
-      setOrderDetailStatus('');
-      scanOlpnInput.focus();
-      
-      // Sort by OlpnId and render rows: Location, oLPN, Quantity (TotalQty), Weight
-      const sorted = [...olpns].sort((a, b) => {
+    // Render Order Detail table from oLPN list (sort by OlpnId, show bundle icon/tooltip)
+    function renderOrderDetailTable(olpns) {
+      const sorted = [...(olpns || [])].sort((a, b) => {
         const idA = (a.OlpnId || a.olpnId || '').toString().toLowerCase();
         const idB = (b.OlpnId || b.olpnId || '').toString().toLowerCase();
         return idA.localeCompare(idB);
       });
-      
       orderDetailTableBody.innerHTML = '';
       sorted.forEach(olpn => {
         const location = olpn.CurrentLocationId || olpn.currentLocationId || olpn.CurrentLocation || '—';
@@ -1078,8 +1049,49 @@
         row.innerHTML = `<td>${location}</td><td>${olpnCellContent}</td><td>${quantity}</td><td>${weight}</td>`;
         orderDetailTableBody.appendChild(row);
       });
+      if (selectedOrder) status(`Order ${selectedOrder.OrderId} – ${(olpns || []).length} oLPN(s)`);
+    }
+
+    // Refetch oLPNs for current order from API and refresh the Order Detail table (no in-memory state)
+    async function refreshOrderDetailOlpns() {
+      if (!selectedOrder || !org || !token) return { success: false, error: 'No order selected or not authenticated.' };
+      const res = await api('getOlpns', { org, token, orderId: selectedOrder.OrderId });
+      if (!res.success) return { success: false, error: res.error || 'Unknown error' };
+      const olpns = res.olpns || [];
+      currentOrderOlpns = olpns;
+      renderOrderDetailTable(currentOrderOlpns);
+      return { success: true, olpns };
+    }
+
+    // Select Order button – show Order Detail screen and load oLPNs
+    selectOrderBtn.onclick = async () => {
+      if (!selectedOrder || !token || !org) return;
       
-      status(`Order ${selectedOrder.OrderId} – ${olpns.length} oLPN(s)`);
+      logToConsole(`\n=== Select Order Clicked ===`, 'info');
+      logToConsole(`Selected Order: ${selectedOrder.OrderId}`, 'info');
+      
+      status('Loading oLPNs...');
+      const res = await api('getOlpns', { org, token, orderId: selectedOrder.OrderId });
+      
+      if (!res.success) {
+        status('Failed to load oLPNs: ' + (res.error || 'Unknown error'), 'error');
+        return;
+      }
+      
+      const olpns = res.olpns || [];
+      currentOrderOlpns = olpns;
+      logToConsole(`Loaded ${olpns.length} oLPNs for order ${selectedOrder.OrderId}`, 'info');
+      
+      orderListScreen.style.display = 'none';
+      orderDetailScreen.style.display = 'block';
+      
+      orderDetailOrderId.value = selectedOrder.OrderId || '';
+      scanOlpnInput.value = '';
+      addOlpnToBundleInput.value = '';
+      setOrderDetailStatus('');
+      scanOlpnInput.focus();
+      
+      renderOrderDetailTable(olpns);
     };
 
     // Validate: check Bundle oLPN value exists in the oLPN list on the page (no API)
@@ -1205,18 +1217,16 @@
         setOrderDetailStatus(errMsg, 'error');
         return;
       }
-      // Update in-memory bundle record so table re-render shows new count and tooltip (same object ref as in currentOrderOlpns)
-      if (bundleRecord) {
-        const ext = bundleRecord.Extended ?? bundleRecord.extended ?? {};
-        bundleRecord.Extended = { ...ext, CombinedOlpns: combinedOlpnsString };
-        bundleRecord.extended = { ...ext, CombinedOlpns: combinedOlpnsString };
-      }
-      const totalInBundle = combinedArray.length + 1; // bundle itself + combined oLPNs
-      const successMsg = `Added oLPN "${addValue}" to bundle (${totalInBundle} oLPN(s) in bundle).`;
-      status(successMsg, 'success');
-      setOrderDetailStatus(successMsg, 'success');
       addOlpnToBundleInput.value = '';
-      renderOrderDetailTable(currentOrderOlpns);
+      setOrderDetailStatus('Refreshing list...', 'info');
+      const refresh = await refreshOrderDetailOlpns();
+      if (refresh.success) {
+        status(`Added oLPN "${addValue}" to bundle. List refreshed.`, 'success');
+        setOrderDetailStatus(`Added oLPN "${addValue}" to bundle. List refreshed.`, 'success');
+      } else {
+        status(`Added oLPN "${addValue}" to bundle. Refresh failed: ${refresh.error}`, 'error');
+        setOrderDetailStatus(`Added to bundle but refresh failed: ${refresh.error}`, 'error');
+      }
     };
 
     // Remove from Bundle: validate input exists in CombinedOlpns, then remove and save
@@ -1308,18 +1318,16 @@
         setOrderDetailStatus(errMsg, 'error');
         return;
       }
-
-      if (bundleRecord) {
-        if (!bundleRecord.Extended) bundleRecord.Extended = {};
-        if (!bundleRecord.extended) bundleRecord.extended = {};
-        bundleRecord.Extended.CombinedOlpns = combinedOlpnsString;
-        bundleRecord.extended.CombinedOlpns = combinedOlpnsString;
-      }
-      const successMsg = `Removed oLPN "${removeValue}" from bundle (${combinedArray.length} oLPN(s) remaining in bundle).`;
-      status(successMsg, 'success');
-      setOrderDetailStatus(successMsg, 'success');
       removeOlpnFromBundleInput.value = '';
-      renderOrderDetailTable(currentOrderOlpns);
+      setOrderDetailStatus('Refreshing list...', 'info');
+      const refresh = await refreshOrderDetailOlpns();
+      if (refresh.success) {
+        status(`Removed oLPN "${removeValue}" from bundle. List refreshed.`, 'success');
+        setOrderDetailStatus(`Removed oLPN "${removeValue}" from bundle. List refreshed.`, 'success');
+      } else {
+        status(`Removed from bundle but refresh failed: ${refresh.error}`, 'error');
+        setOrderDetailStatus(`Removed from bundle but refresh failed: ${refresh.error}`, 'error');
+      }
     };
 
     // Back button – return to Order List screen
