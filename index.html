@@ -1058,7 +1058,7 @@
         if (raw && typeof raw === 'string' && raw.trim()) {
           try {
             const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) {
+            if (Array.isArray(arr) && arr.length > 0) {
               bundleCount = arr.length + 1;
               const ids = [olpnId, ...arr.map(entry => (entry.OlpnId ?? entry.olpnId ?? '').toString()).filter(Boolean)];
               bundleOlpnIdsList = ids.join(', ');
