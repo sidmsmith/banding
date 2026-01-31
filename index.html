@@ -1416,7 +1416,7 @@
         const d = details[i];
         const itemId = (d.ItemId ?? d.itemId ?? '').toString();
         const qty = d.PackedQuantity ?? d.packedQuantity ?? 0;
-        setOrderDetailStatus(`Splitting item ${i + 1}/${details.length} (${itemId})...`, 'info');
+        setOrderDetailStatus(`Removing from bundle (item ${i + 1}/${details.length})...`, 'info');
 
         const splitRes = await api('splitOlpn', {
           org,
@@ -1456,6 +1456,19 @@
       syncOrderDetailButtonState();
       setOrderDetailStatus('Refreshing list...', 'info');
       const refresh = await refreshOrderDetailOlpns();
+
+      // After splits, clear Extended.CombinedOlpns on the To LPN (split-out oLPN) if Manhattan populated it.
+      // Do once after all items: get To LPN from refreshed list, set CombinedOlpns to "[]".
+      if (successCount > 0 && refresh.success) {
+        const toRecord = currentOrderOlpns.find(o => norm(o.OlpnId || o.olpnId || o.oLPNId || '') === removeNorm);
+        if (toRecord) {
+          const toPkRaw = toRecord.PK ?? toRecord.Pk ?? toRecord.pk ?? toRecord.OlpnPk ?? toRecord.olpnPk;
+          const toPk = toPkRaw != null ? String(toPkRaw) : '';
+          if (toPk) {
+            await api('updateOlpnExtended', { org, token, olpnId: removeValue, pk: toPk, combinedOlpns: '[]' });
+          }
+        }
+      }
 
       if (successCount === details.length) {
         status(`Removed oLPN "${removeValue}" from bundle (${successCount} item(s)).`, 'success');
