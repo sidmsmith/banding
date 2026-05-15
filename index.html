@@ -321,7 +321,7 @@
       </button>
       <div class="header-with-logo">
         <img id="themeLogo" class="theme-logo" alt="Theme Logo" />
-        <h2 class="text-center mb-4">Banding v1.0.2</h2>
+        <h2 class="text-center mb-4">Banding v1.0.4</h2>
       </div>
     </div>
 
@@ -458,7 +458,13 @@
 
   <script>
     const APP_VERSION = 'v1.0.4';
-    
+    const pageLoadTime = new Date().toISOString();
+    const sessionId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    let authAttemptCount = 0;
+    let firstAuthSuccess = false;
+
     // URL Parameters
     const urlParams = new URLSearchParams(window.location.search);
     const organizationParam = urlParams.get('Organization');
@@ -578,6 +584,108 @@
       orderDetailStatusText.className = type ? `status ${type}` : 'status';
       if (orderDetailStatusBox) {
         orderDetailStatusBox.style.borderColor = type === 'error' ? 'var(--red-text)' : type === 'success' ? 'var(--success)' : 'var(--border)';
+      }
+    }
+
+    function getBrowserName() {
+      const ua = navigator.userAgent;
+      if (ua.includes('Chrome') && !ua.includes('Edg')) return 'Chrome';
+      if (ua.includes('Firefox')) return 'Firefox';
+      if (ua.includes('Safari') && !ua.includes('Chrome')) return 'Safari';
+      if (ua.includes('Edg')) return 'Edge';
+      if (ua.includes('Opera') || ua.includes('OPR')) return 'Opera';
+      return 'Unknown';
+    }
+
+    function getBrowserVersion() {
+      const ua = navigator.userAgent;
+      const match = ua.match(/(Chrome|Firefox|Safari|Edg|Opera|OPR)\/(\d+)/);
+      return match ? match[2] : 'Unknown';
+    }
+
+    function getOSName() {
+      const ua = navigator.userAgent;
+      if (ua.includes('Windows')) return 'Windows';
+      if (ua.includes('Mac')) return 'macOS';
+      if (ua.includes('Linux')) return 'Linux';
+      if (ua.includes('Android')) return 'Android';
+      if (ua.includes('iOS')) return 'iOS';
+      return 'Unknown';
+    }
+
+    function getOSVersion() {
+      const ua = navigator.userAgent;
+      if (ua.includes('Windows NT 10.0')) return '10';
+      if (ua.includes('Windows NT 6.3')) return '8.1';
+      if (ua.includes('Windows NT 6.2')) return '8';
+      if (ua.includes('Windows NT 6.1')) return '7';
+      if (ua.includes('Mac OS X')) {
+        const match = ua.match(/Mac OS X (\d+[._]\d+)/);
+        return match ? match[1].replace('_', '.') : 'Unknown';
+      }
+      return 'Unknown';
+    }
+
+    function getDeviceType() {
+      const ua = navigator.userAgent;
+      if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) return 'Tablet';
+      if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(ua)) return 'Mobile';
+      return 'Desktop';
+    }
+
+    function getCommonMetadata(eventSpecificMetadata = {}) {
+      const appName = document.title.split(' v')[0] || 'Banding';
+      const appVersionMatch = document.title.match(/v(\d+\.\d+\.\d+)/i);
+      const appVersion = appVersionMatch ? appVersionMatch[1] : '1.0.4';
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlParamsObj = {};
+      for (const [key, value] of urlParams.entries()) {
+        urlParamsObj[key] = value;
+      }
+
+      const currentTheme = localStorage.getItem('selectedTheme') || 'dark';
+      const hasSavedPreferences = localStorage.getItem('selectedTheme') !== null;
+      const hasSavedSort = localStorage.getItem('bandingSort') !== null;
+
+      return {
+        page_title: appName,
+        ui_version: appVersion,
+        timestamp: new Date().toISOString(),
+        session_id: sessionId,
+        page_load_time: pageLoadTime,
+        time_on_page_seconds: Math.floor((Date.now() - new Date(pageLoadTime).getTime()) / 1000),
+        user_agent: navigator.userAgent,
+        browser_name: getBrowserName(),
+        browser_version: getBrowserVersion(),
+        device_type: getDeviceType(),
+        os_name: getOSName(),
+        os_version: getOSVersion(),
+        screen_resolution: `${window.screen.width}x${window.screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        language: navigator.language,
+        referrer: document.referrer,
+        url_params: urlParamsObj,
+        auto_authenticated: !!(organizationParam || orgParam),
+        theme: currentTheme,
+        has_saved_preferences: hasSavedPreferences,
+        has_saved_sort: hasSavedSort,
+        request_origin: window.location.origin,
+        auth_method: (organizationParam || orgParam) ? 'url_param' : 'manual',
+        auth_attempt_count: authAttemptCount,
+        first_auth_success: firstAuthSuccess,
+        ...eventSpecificMetadata
+      };
+    }
+
+    async function trackEvent(eventName, metadata = {}) {
+      try {
+        await api('usage-track', {
+          event_name: eventName,
+          metadata: getCommonMetadata(metadata)
+        });
+      } catch (error) {
+        console.warn('[usage] Failed to track event:', error);
       }
     }
 
@@ -829,8 +937,8 @@
         const sortedData = sortOrders(ordersData, currentSort.column, currentSort.direction);
         renderResults(sortedData);
       }
-      
-      // Sort applied (no logging needed)
+
+      void trackEvent('banding_sort_changed', { column: currentSort.column, direction: currentSort.direction });
     }
 
     function renderThemeList() {
@@ -845,6 +953,7 @@
         item.textContent = theme.name;
         item.onclick = () => {
           applyTheme(key);
+          void trackEvent('banding_theme_changed', { theme: key });
           themeModal.hide();
         };
         themeList.appendChild(item);
@@ -865,6 +974,7 @@
         if (consoleSection) {
           const isHidden = consoleSection.style.display === 'none' || !consoleSection.style.display;
           consoleSection.style.display = isHidden ? 'block' : 'none';
+          void trackEvent('banding_console_toggled', { visible: !isHidden });
         }
       });
     }
@@ -873,6 +983,7 @@
       consoleCloseBtn.addEventListener('click', () => {
         if (consoleSection) {
           consoleSection.style.display = 'none';
+          void trackEvent('banding_console_toggled', { visible: false });
         }
       });
     }
@@ -895,53 +1006,29 @@
       }
     }
 
-    // Auth
-    orgInput.addEventListener('keypress', async e => {
+    // Auth (Enter on ORG field)
+    orgInput.addEventListener('keypress', async (e) => {
       if (e.key !== 'Enter') return;
       const orgValue = orgInput.value.trim();
-      if (!orgValue) return status('ORG required', 'error');
-      
-      status('Authenticating...');
-      logToConsole(`\n=== Authentication ===`, 'info');
-      const res = await api('auth', { org: orgValue });
-      
-      if (!res.success) {
-        status(res.error || 'Auth failed', 'error');
+      if (!orgValue) {
+        status('ORG required', 'error');
         return;
       }
-      
-      token = res.token;
-      org = orgValue;
-      status('Authenticated – ready! Loading orders...', 'success');
-      logToConsole(`Authentication successful for ORG: ${org}`, 'success');
-      
-      // Hide ORG section after successful authentication
-      const orgSection = document.getElementById('orgSection');
-      if (orgSection) {
-        orgSection.style.display = 'none';
-      }
-      
-      mainUI.style.display = 'block';
-      
-      // Initialize table headers after UI is shown
-      setTimeout(() => {
-        initializeTableHeaders();
-        updateSortIndicators();
-      }, 100);
-      
-      // Automatically search for orders after authentication
-      await loadOrders();
+      await authenticateOrg(orgValue, 'manual_enter');
     });
 
     // Load orders
     async function loadOrders() {
       if (!token || !org) return;
-      
+
+      await trackEvent('banding_search_orders_attempt', { org });
+
       status('Searching for orders with Status=7200...');
       const res = await api('searchOrders', { org, token });
       
       if (!res.success) {
         status('Failed to load orders: ' + (res.error || 'Unknown error'), 'error');
+        await trackEvent('banding_search_orders_failed', { org, error: res.error || 'Unknown error' });
         return;
       }
       
@@ -989,10 +1076,12 @@
       if (ordersData.length === 0) {
         status('No orders found with Status=7200 (or all orders have 0 oLPNs)', 'error');
         renderResults([]);
+        await trackEvent('banding_search_orders_completed', { order_count: 0, filtered_empty: true });
         return;
       }
       
       status(`Found ${ordersData.length} orders`, 'success');
+      await trackEvent('banding_search_orders_completed', { order_count: ordersData.length });
       
       // Apply saved sort
       const sortedData = sortOrders(ordersData, currentSort.column, currentSort.direction);
@@ -1010,6 +1099,54 @@
           await openOrderDetailScreen();
         }
       }
+    }
+
+    async function authenticateOrg(orgValue, authSource = 'manual_enter') {
+      const trimmed = (orgValue || '').trim();
+      if (!trimmed) {
+        status('ORG required', 'error');
+        return;
+      }
+
+      authAttemptCount++;
+      await trackEvent('auth_attempt', { org: trimmed, auth_source: authSource });
+
+      status('Authenticating...');
+      logToConsole(`\n=== Authentication ===`, 'info');
+      const res = await api('auth', { org: trimmed });
+
+      if (!res.success) {
+        status(res.error || 'Auth failed', 'error');
+        await trackEvent('auth_failed', {
+          org: trimmed,
+          error: res.error || 'Auth failed',
+          token_received: false,
+          auth_source: authSource
+        });
+        return;
+      }
+
+      token = res.token;
+      org = trimmed;
+      if (!firstAuthSuccess) firstAuthSuccess = true;
+      await trackEvent('auth_success', { org: trimmed, token_received: true, auth_source: authSource });
+
+      status('Authenticated – ready! Loading orders...', 'success');
+      logToConsole(`Authentication successful for ORG: ${org}`, 'success');
+
+      const orgSection = document.getElementById('orgSection');
+      if (orgSection) {
+        orgSection.style.display = 'none';
+      }
+
+      mainUI.style.display = 'block';
+
+      setTimeout(() => {
+        initializeTableHeaders();
+        updateSortIndicators();
+      }, 100);
+
+      await loadOrders();
     }
 
     // Render results
@@ -1052,6 +1189,7 @@
       selectedEl.textContent = order.OrderId || 'None';
       selectOrderBtn.disabled = false;
       logToConsole(`Selected order: ${order.OrderId}`, 'info');
+      void trackEvent('banding_order_selected', { order_id: order.OrderId || null });
     }
 
     // Render Order Detail table from oLPN list (sort by OlpnId, show bundle icon/tooltip)
@@ -1119,20 +1257,27 @@
     // Open Order Detail screen: load oLPNs for selectedOrder and show detail (used by Select Order and URL Order param)
     async function openOrderDetailScreen() {
       if (!selectedOrder || !token || !org) return;
+      const orderId = selectedOrder.OrderId;
       logToConsole(`\n=== Open Order Detail ===`, 'info');
-      logToConsole(`Selected Order: ${selectedOrder.OrderId}`, 'info');
+      logToConsole(`Selected Order: ${orderId}`, 'info');
+      await trackEvent('banding_order_detail_attempt', { order_id: orderId });
       status('Loading oLPNs...');
-      const res = await api('getOlpns', { org, token, orderId: selectedOrder.OrderId });
+      const res = await api('getOlpns', { org, token, orderId });
       if (!res.success) {
         status('Failed to load oLPNs: ' + (res.error || 'Unknown error'), 'error');
+        await trackEvent('banding_order_detail_failed', {
+          order_id: orderId,
+          error: res.error || 'Unknown error'
+        });
         return;
       }
       const olpns = res.olpns || [];
       currentOrderOlpns = olpns;
-      logToConsole(`Loaded ${olpns.length} oLPNs for order ${selectedOrder.OrderId}`, 'info');
+      logToConsole(`Loaded ${olpns.length} oLPNs for order ${orderId}`, 'info');
+      await trackEvent('banding_order_detail_opened', { order_id: orderId, olpn_count: olpns.length });
       orderListScreen.style.display = 'none';
       orderDetailScreen.style.display = 'block';
-      orderDetailOrderId.value = selectedOrder.OrderId || '';
+      orderDetailOrderId.value = orderId || '';
       scanOlpnInput.value = '';
       addOlpnToBundleInput.value = '';
       removeOlpnFromBundleInput.value = '';
@@ -1280,6 +1425,12 @@
       combinedArray.push({ OlpnId: addOlpnId, Details: detailsForPayload });
       const combinedOlpnsString = JSON.stringify(combinedArray);
 
+      await trackEvent('banding_add_to_bundle_attempt', {
+        order_id: selectedOrder.OrderId,
+        bundle_olpn_id: bundleValue,
+        add_olpn_id: addValue
+      });
+
       status('Combining oLPN...');
       setOrderDetailStatus('Combining oLPN...', 'info');
       updateBundleBtn.disabled = true;
@@ -1298,6 +1449,13 @@
         const errMsg = combineRes.error || 'Combine oLPN failed';
         status(errMsg, 'error');
         setOrderDetailStatus(errMsg, 'error');
+        await trackEvent('banding_add_to_bundle_failed', {
+          step: 'combine',
+          order_id: selectedOrder.OrderId,
+          bundle_olpn_id: bundleValue,
+          add_olpn_id: addValue,
+          error: errMsg
+        });
         return;
       }
       
@@ -1316,6 +1474,13 @@
         const errMsg = res.error || 'Update CombinedOlpns failed';
         status(errMsg, 'error');
         setOrderDetailStatus(errMsg, 'error');
+        await trackEvent('banding_add_to_bundle_failed', {
+          step: 'update_extended',
+          order_id: selectedOrder.OrderId,
+          bundle_olpn_id: bundleValue,
+          add_olpn_id: addValue,
+          error: errMsg
+        });
         return;
       }
       addOlpnToBundleInput.value = '';
@@ -1353,6 +1518,12 @@
         const fallback = await refreshOrderDetailOlpns();
         if (fallback.success) setOrderDetailStatus(`Added oLPN "${addValue}" to bundle. List refreshed.`, 'info');
       }
+      await trackEvent('banding_add_to_bundle_completed', {
+        order_id: selectedOrder.OrderId,
+        bundle_olpn_id: bundleValue,
+        add_olpn_id: addValue,
+        list_refresh_ok: refresh.success
+      });
     };
 
     // Remove from Bundle: call Split API once per item (ItemId/Quantity from CombinedOlpns Details).
@@ -1430,6 +1601,13 @@
       let successCount = 0;
       const detailsCount = details.length;
 
+      await trackEvent('banding_remove_from_bundle_attempt', {
+        order_id: selectedOrder.OrderId,
+        bundle_olpn_id: bundleValue,
+        remove_olpn_id: removeValue,
+        item_line_count: detailsCount
+      });
+
       for (let i = 0; i < details.length; i++) {
         const d = details[i];
         const itemId = (d.ItemId ?? d.itemId ?? '').toString();
@@ -1489,20 +1667,41 @@
         const msg = `oLPN ${removeValue} removed from bundle ${bundleValue}.`;
         status(msg, 'success');
         setOrderDetailStatus(msg, 'success');
+        await trackEvent('banding_remove_from_bundle_completed', {
+          order_id: selectedOrder.OrderId,
+          bundle_olpn_id: bundleValue,
+          remove_olpn_id: removeValue,
+          item_line_count: detailsCount
+        });
       } else if (successCount > 0) {
         const errMsg = errors.length ? ` ${errors.join('; ')}` : '';
         const msg = `oLPN ${removeValue} removed from bundle ${bundleValue} (${successCount}/${detailsCount} item(s)).${errMsg}`;
         status(msg, 'error');
         setOrderDetailStatus(msg, 'error');
+        await trackEvent('banding_remove_from_bundle_partial', {
+          order_id: selectedOrder.OrderId,
+          bundle_olpn_id: bundleValue,
+          remove_olpn_id: removeValue,
+          success_count: successCount,
+          item_line_count: detailsCount,
+          errors_joined: errors.join('; ')
+        });
       } else {
         const msg = errors.length ? errors[0] : `Failed to remove oLPN ${removeValue} from bundle ${bundleValue}.`;
         status(msg, 'error');
         setOrderDetailStatus(msg, 'error');
+        await trackEvent('banding_remove_from_bundle_failed', {
+          order_id: selectedOrder.OrderId,
+          bundle_olpn_id: bundleValue,
+          remove_olpn_id: removeValue,
+          error: msg
+        });
       }
     };
 
     // Back button – return to Order List screen
     orderDetailBackBtn.onclick = () => {
+      void trackEvent('banding_back_to_order_list', { order_count: ordersData.length });
       orderDetailScreen.style.display = 'none';
       orderListScreen.style.display = 'block';
       status(`Found ${ordersData.length} orders`, 'success');
@@ -1517,7 +1716,7 @@
     }
 
     // Initialize on page load
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       
       // Load theme and sort preferences
       loadTheme();
@@ -1535,16 +1734,19 @@
       if (mainUI) {
         observer.observe(mainUI, { attributes: true, attributeFilter: ['style'] });
       }
+
+      await trackEvent('app_opened', {
+        has_url_params: window.location.search.length > 0,
+        url_org: urlOrg,
+        url_console: urlConsole,
+        url_order: urlOrder
+      });
       
-      // Check for Organization parameter in URL and auto-authenticate
       if (urlOrg && urlOrg.trim()) {
-        // Populate the input field
         if (orgInput) {
           orgInput.value = urlOrg.trim();
         }
-        
-        // Auto-authenticate
-        orgInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter' }));
+        await authenticateOrg(urlOrg.trim(), 'url_param');
       }
     });
   </script>

@@ -1,7 +1,7 @@
 # api/index.py
 from flask import Flask, request, jsonify, send_from_directory
 import json, os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import requests
 from requests.auth import HTTPBasicAuth
@@ -19,11 +19,30 @@ PASSWORD = os.getenv("MANHATTAN_PASSWORD")
 CLIENT_ID = "omnicomponent.1.0.0"
 CLIENT_SECRET = os.getenv("MANHATTAN_SECRET")
 
+# === Usage ingest (dashboard → Neon) ===
+USAGE_INGEST_URL = os.getenv("MANHATTAN_USAGE_INGEST_URL", "").strip()
+USAGE_INGEST_SECRET = os.getenv("MANHATTAN_USAGE_INGEST_SECRET", "").strip()
+APP_NAME = "banding"
+APP_VERSION = "1.0.4"
+
 # Critical: Fail fast if secrets missing
 if not PASSWORD or not CLIENT_SECRET:
     raise Exception("Missing MANHATTAN_PASSWORD or MANHATTAN_SECRET environment variables")
 
 # === HELPERS ===
+def forward_usage_event(payload):
+    """POST usage JSON to Manhattan app usage dashboard ingest (Neon)."""
+    if not USAGE_INGEST_URL:
+        print("[usage] MANHATTAN_USAGE_INGEST_URL not set; event not recorded")
+        return
+    headers = {"Content-Type": "application/json"}
+    if USAGE_INGEST_SECRET:
+        headers["Authorization"] = f"Bearer {USAGE_INGEST_SECRET}"
+    try:
+        requests.post(USAGE_INGEST_URL, json=payload, headers=headers, timeout=8)
+    except Exception as e:
+        print(f"[usage] Forward failed: {e}")
+
 def get_manhattan_token(org):
     url = f"https://{AUTH_HOST}/oauth/token"
     username = f"{USERNAME_BASE}{org.lower()}"
@@ -645,6 +664,24 @@ def update_olpn_extended():
     if data and data.get("success") is False:
         return jsonify({"success": False, "error": json.dumps(data)})
     return jsonify({"success": True, "data": data})
+
+
+@app.route("/api/usage-track", methods=["POST"])
+def usage_track():
+    """Receive events from frontend and forward to usage ingest (Neon)."""
+    data = request.json or {}
+    event_name = data.get("event_name")
+    metadata = data.get("metadata", {})
+    payload = {
+        **metadata,
+        "event_name": event_name,
+        "app_name": APP_NAME,
+        "app_version": APP_VERSION,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    forward_usage_event(payload)
+    return jsonify({"success": True})
+
 
 # === FALLBACK: Serve index.html for SPA (Critical for Vercel) ===
 @app.route('/', defaults={'path': ''})
